@@ -1,24 +1,28 @@
 # Start here in Codex
 
-First, if the source tree has not been unpacked yet, run:
+Open this repository in Codex and use the following as the first task:
+
+> Continue NambaDrive v1.0 from the current repository. Read `AGENTS.md` and all files under `docs/approved/` first. Treat them as approved requirements. Do not simplify security controls. Inspect current code before changing it. Current implementation includes Phases 0–4. Phase 4 local authorization regression tests are green. PostgreSQL 17 migration and authorization runtime validation passed; real Authentik validation remains pending; see docs/phase4-authorization.md. Phases 2–4 are implemented. Validate the authorization gate before continuing the approved sequence from Phase 5. For each phase create Alembic migrations, backend services/API, frontend minimum admin UI where appropriate, tests, documentation, and CI checks. Run available tests/lint/migrations after changes. Do not proceed past the ACL phase unless the authorization regression suite is green. Never expose PostgreSQL/Redis/OpenSearch/SeaweedFS directly to user network and never introduce direct browser-to-S3 access.
+
+## Current first commands
 
 ```bash
-bash bootstrap_handoff.sh
+find . -maxdepth 3 -type f | sort
+cat AGENTS.md
+cat README.md
+cat docs/approved/requirements-v1.md
+cat docs/approved/acl-model.md
 ```
 
-Then read `AGENTS.md` and all files under `docs/approved/` first.
+For local AIO runtime:
 
-Continue NambaDrive v1.0 from the current repository. Treat the approved specs as binding. Do not simplify security controls. Inspect current code before changing it.
+```bash
+cd deploy/aio
+cp .env.example .env
+# fill real DEV values
 
-Current implementation is Phase 0 + Phase 1 identity only; Phase 2+ is not implemented.
+docker compose --env-file .env up -d --build
+docker compose --env-file .env run --rm backend alembic upgrade head
+```
 
-Continue with:
-1. Phase 2 organization structure
-2. Phase 3 unified resource tree
-3. Phase 4 AuthorizationService
-
-For each phase create Alembic migrations, backend services/API, frontend minimum admin UI where appropriate, tests, documentation, and CI checks.
-
-Do not proceed past the ACL phase unless the authorization regression suite is green. Never expose PostgreSQL/Redis/OpenSearch/SeaweedFS directly to user network and never introduce direct browser-to-S3 access.
-
-If Docker or external Authentik is unavailable in the coding environment, continue implementation and automated tests that do not require the external service; clearly report the unvalidated runtime boundary instead of weakening the implementation.
+If Docker or external Authentik is unavailable in the coding environment, continue implementation and automated unit/integration tests that do not require the external service; clearly report the unvalidated runtime boundary instead of weakening the implementation.

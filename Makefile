@@ -10,7 +10,7 @@ help:
 	@echo "migrate          Run Alembic upgrade head in AIO"
 
 backend-test:
-	cd backend && pytest -q
+	cd backend && pytest -q --cov=app.authorization --cov-branch --cov-fail-under=90
 
 backend-lint:
 	ruff check backend/app backend/tests backend/alembic
@@ -30,3 +30,10 @@ down:
 
 migrate:
 	cd deploy/aio && docker compose --env-file .env run --rm backend alembic upgrade head
+
+.PHONY: security-check
+security-check:
+	bandit -q -r backend/app
+	python scripts/secret_scan.py
+	pip-audit --local --skip-editable
+	cd frontend && npm audit --audit-level=low

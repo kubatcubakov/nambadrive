@@ -8,9 +8,9 @@ If a stronger coding/reasoning model is unavailable, do not intentionally downgr
 ## Current code status
 - Phase 0 Foundation: implemented.
 - Phase 1 Authentik OIDC + server-side sessions + CSRF: implemented for DEV/UAT, not yet runtime-validated against the user's real Authentik.
-- Phase 2 Organization structure: NOT IMPLEMENTED.
-- Phase 3 Unified resource tree: NOT IMPLEMENTED.
-- Phase 4 Authorization/ACL engine: NOT IMPLEMENTED.
+- Phase 2 Organization structure: implemented, local gates green.
+- Phase 3 Unified resource tree: implemented, local and PostgreSQL 17 gates green.
+- Phase 4 Authorization/ACL engine: implemented with a green local authorization regression suite and >=90% coverage. PostgreSQL 17 runtime validation passed; real Authentik validation remains pending. See docs/phase4-authorization.md.
 - No document storage, SeaweedFS, ClamAV, ONLYOFFICE, OpenSearch, share, retention, or legal-hold business logic exists yet.
 
 Do not infer progress from directory names. Verify code.
@@ -152,11 +152,9 @@ ACL/security changes require both positive and negative tests. Authorization mod
 
 Never fail-open. DB/authz error -> deny/error, never allow.
 
-## Immediate next work
-Continue from Phase 2:
-1. inspect existing repo and tests before editing.
-2. implement companies/departments hierarchy, user membership, Department Manager model/service/admin API and migrations.
-3. then implement unified resource tree (SPACE/FOLDER/DOCUMENT security resource only; actual document binary work later).
-4. then implement AuthorizationService with exhaustive unit tests before moving to SeaweedFS.
+## Current checkpoint
+Phases 2–4 are implemented. See docs/phase2-organization.md, docs/phase3-resource-tree.md and docs/phase4-authorization.md for API contracts, validation and runtime boundaries. Phase 5 has not been started.
+
+Before future document/storage work, rerun the Phase 4 authorization regression suite with >=90% coverage and validate the PostgreSQL 17 migrations/triggers in CI. All approved security invariants above remain binding. Do not infer runtime validation from generated SQL or SQLite tests.
 
 Do not ask the user to re-answer already approved architecture questions unless a genuinely blocking contradiction is found.
