@@ -8,9 +8,9 @@ Source of truth: implementation and recorded test results; a scaffold alone is n
 | 5 | SeaweedFS adapter | Complete; local, real SeaweedFS and CI gates green |
 | 6 | Upload + ClamAV | Complete; local, PostgreSQL, real ClamAV and CI gates green |
 | 7 | Document operations + preview | Complete; local/PostgreSQL and CI gates green |
-| 8 | Immutable version history/current + 2 | Local/PostgreSQL gates green; CI pending |
-| 9 | ONLYOFFICE | Next |
-| 10 | Tika/OpenSearch | Pending |
+| 8 | Immutable version history/current + 2 | Complete; local/PostgreSQL and CI gates green |
+| 9 | ONLYOFFICE | Protocol implementation/gates green; CI pending, live editor acceptance pending |
+| 10 | Tika/OpenSearch | Next |
 | 11 | Sharing | Pending |
 | 12 | Access requests | Pending |
 | 13 | Retention/hold/purge | Pending |

@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
 
     s3_endpoint: str = "http://seaweed:8333"
+    office_public_url: str = ""
+    office_internal_url: str = "http://onlyoffice"
+    office_backend_url: str = "http://backend:8000"
+    office_browser_secret: SecretStr = SecretStr("")
+    office_outbox_secret: SecretStr = SecretStr("")
+    office_session_seconds: int = Field(default=1800, ge=60, le=3600)
     clamav_host: str = "clamav"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     s3_region: str = "us-east-1"

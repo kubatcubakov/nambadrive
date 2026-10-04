@@ -44,7 +44,7 @@ backend-migration-test:
     - alembic check
     - alembic downgrade 0002_identity_sessions
     - alembic upgrade head
-    - NAMBADRIVE_TEST_POSTGRES=1 pytest -q tests/test_authorization.py tests/test_resource_api.py tests/test_postgres.py tests/test_upload.py tests/test_documents.py tests/test_versions.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+    - NAMBADRIVE_TEST_POSTGRES=1 pytest -q tests/test_authorization.py tests/test_resource_api.py tests/test_postgres.py tests/test_upload.py tests/test_documents.py tests/test_versions.py tests/test_office.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
 
 frontend-check:
   stage: validate

@@ -15,6 +15,7 @@ from app.models.acl import (  # noqa: F401
 )
 from app.models.document import DocumentVersion  # noqa: F401
 from app.models.metadata import DocumentMetadata  # noqa: F401
+from app.models.office import OfficeRoom, OfficeSave, OfficeSession  # noqa: F401
 from app.models.organization import (  # noqa: F401
     Company,
     Department,

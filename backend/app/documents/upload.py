@@ -91,10 +91,12 @@ class UploadService:
         name: str,
         source: BinaryIO,
         context: dict[str, Any],
+        *,
+        commit: bool = True,
+        office: bool = False,
     ) -> DocumentVersion:
-        document = await DocumentService(self.db, actor, context).require(
-            document_id, "UPLOAD_NEW_VERSION"
-        )
+        permission = "EDIT" if office else "UPLOAD_NEW_VERSION"
+        document = await DocumentService(self.db, actor, context).require(document_id, permission)
         name = filename(name)
         if name.rsplit(".", 1)[-1].lower() != document.name.rsplit(".", 1)[-1].lower():
             raise ValueError("New version must retain document format")
@@ -114,6 +116,7 @@ class UploadService:
             size=info.size,
             sha256=info.sha256,
             status="PENDING",
+            ingest_permission=permission,
             sequence_no=await next_sequence(self.db, document.id),
         )
         self.db.add(version)
@@ -126,7 +129,8 @@ class UploadService:
             version=str(version.id),
             **context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return version
 
     async def scan_one(self, scanner: ClamAV) -> bool:
@@ -168,7 +172,7 @@ class UploadService:
         permission, target_id = (
             ("CREATE", parent_id)
             if document.state == "QUARANTINED"
-            else ("UPLOAD_NEW_VERSION", document.id)
+            else (version.ingest_permission, document.id)
         )
         allowed = await AuthorizationService().authorize(self.db, actor, permission, target_id)
         if document.state not in {"QUARANTINED", "ACTIVE"} or not allowed.allowed:

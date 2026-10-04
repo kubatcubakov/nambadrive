@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { OfficeEditor } from './OfficeEditor'
 import { Versions } from './Versions'
 import { Upload } from './Upload'
 
@@ -23,6 +24,9 @@ export function Drive() {
   const [selected, setSelected] = useState<Detail | null>(null)
   const [permissions, setPermissions] = useState<string[]>([])
   const [status, setStatus] = useState('')
+  const [editing, setEditing] = useState<string | null>(null)
+  const [newOfficeName, setNewOfficeName] = useState('')
+  const [newOfficeFormat, setNewOfficeFormat] = useState('docx')
   const [preview, setPreview] = useState(false)
   const [rename, setRename] = useState('')
   const [description, setDescription] = useState('')
@@ -63,6 +67,7 @@ export function Drive() {
   }
   return <section className="drive">
     <h2>Документы</h2>
+    {editing && <OfficeEditor documentId={editing} onClose={() => setEditing(null)} />}
     <nav aria-label="Документы"><button onClick={() => {setTrash(false);setPath([]);setSelected(null)}}>Общие пространства</button><button onClick={() => {setTrash(true);setSelected(null)}}>Корзина</button><button onClick={() => void run(reload)}>Обновить</button></nav>
     {!trash && <nav aria-label="Путь">{path.map((item,index) => <button key={item.id} onClick={() => {setPath(path.slice(0,index+1));setSelected(null)}}>{item.name}</button>)}</nav>}
     <p role="status">{status}</p>
@@ -70,10 +75,15 @@ export function Drive() {
       {trash ? <><span>{item.name}</span><button onClick={() => void run(async () => {await api(`/documents/${item.id}/restore`,'POST'); await reload()})}>Восстановить</button></> : <button onClick={() => void run(() => open(item))}>{item.resource_type === 'DOCUMENT' ? '▤' : '▣'} {item.name}</button>}
     </li>)}</ul>
     {!rows.length && <p>Нет доступных документов</p>}
-    {!trash && parent && <Upload key={parent.id} parentId={parent.id} />}
+    {!trash && parent && <><Upload key={parent.id} parentId={parent.id} />
+    <form onSubmit={e => {e.preventDefault();void run(async()=>{await api('/office/create','POST',{parent_id:parent.id,name:newOfficeName,format:newOfficeFormat});setStatus('Документ создан и ожидает антивирусной проверки');setNewOfficeName('')})}}>
+      <label>Новый документ <input required value={newOfficeName} onChange={e=>setNewOfficeName(e.target.value)} /></label>
+      <select aria-label="Формат нового документа" value={newOfficeFormat} onChange={e=>setNewOfficeFormat(e.target.value)}><option value="docx">Текст</option><option value="xlsx">Таблица</option><option value="pptx">Презентация</option></select><button>Создать</button>
+    </form></>}
     {selected && !trash && <article>
       <h3>{selected.name}</h3><p>{selected.mime_type} · {selected.size.toLocaleString()} байт</p>
       <dl><dt>Владелец</dt><dd>{selected.owner_user_id}</dd><dt>Отдел</dt><dd>{selected.department_id}</dd></dl>
+      {permissions.includes('EDIT') && /\.(docx|xlsx|pptx)$/i.test(selected.name) && <button onClick={()=>setEditing(selected.id)}>Открыть в редакторе</button>}
       {permissions.includes('PREVIEW') && <button onClick={() => setPreview(!preview)}>Предпросмотр</button>}
       {permissions.includes('DOWNLOAD') && <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>}
       {preview && <img className="document-preview" src={`/api/v1/documents/${selected.id}/preview`} alt="Предпросмотр документа" onError={() => setStatus('Предпросмотр для этого файла недоступен')} />}

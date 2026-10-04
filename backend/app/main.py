@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.health import router as health_router
+from app.api.v1.office import router as office_router
 from app.api.v1.organization import router as organization_router
 from app.api.v1.resources import router as resources_router
 from app.core.config import get_settings
@@ -38,6 +39,7 @@ app = FastAPI(
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(documents_router, prefix=settings.api_v1_prefix)
+app.include_router(office_router, prefix=settings.api_v1_prefix)
 
 
 app.include_router(organization_router, prefix=settings.api_v1_prefix)

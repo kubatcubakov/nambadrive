@@ -26,6 +26,9 @@ class DocumentVersion(Base):
     __table_args__ = (
         CheckConstraint("status IN ('PENDING','CLEAN','INFECTED','REJECTED')"),
         CheckConstraint("size >= 0"),
+        CheckConstraint(
+            "ingest_permission IN ('CREATE','UPLOAD_NEW_VERSION','EDIT')", name="ck_version_ingest"
+        ),
         CheckConstraint("sequence_no > 0", name="ck_version_sequence"),
         CheckConstraint("NOT is_current OR status = 'CLEAN'", name="ck_current_clean"),
         UniqueConstraint("document_id", "sequence_no", name="uq_document_sequence"),
@@ -47,6 +50,9 @@ class DocumentVersion(Base):
     size: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="PENDING", server_default="PENDING")
+    ingest_permission: Mapped[str] = mapped_column(
+        String(32), default="UPLOAD_NEW_VERSION", server_default="UPLOAD_NEW_VERSION"
+    )
     sequence_no: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     is_current: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     prune_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
