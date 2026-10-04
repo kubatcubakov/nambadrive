@@ -315,3 +315,31 @@ class AuthorizationService:
         return AuthorizationDecision(
             "ALLOW", permission, "EXTERNAL_SHARE", share.document_id, share.document_id
         )
+
+    async def authorize_discovery(
+        self,
+        db: AsyncSession,
+        user: User,
+        resource_id: uuid.UUID,
+    ) -> AuthorizationDecision:
+        # Discovery is an explicit, metadata-only ACL capability, never a default grant.
+        result = await self.authorize(db, user, "REQUEST_ACCESS_DISCOVERY", resource_id)
+        if not result.allowed:
+            return result
+        chain = await ResourceService(db, user, {}).ancestors(resource_id)
+        if any(row.classification == "STRICTLY_CONFIDENTIAL" for row in chain):
+            return AuthorizationDecision(
+                "DENY", "REQUEST_ACCESS_DISCOVERY", "STRICT_DISCOVERY_HIDDEN", resource_id
+            )
+        return result
+
+    async def authorize_request_approval(
+        self,
+        db: AsyncSession,
+        user: User,
+        resource_id: uuid.UUID,
+    ) -> AuthorizationDecision:
+        result = await self.authorize(db, user, "CHANGE_ACL", resource_id)
+        if result.allowed and result.reason in {"OWNER", "DEPARTMENT_MANAGER"}:
+            return result
+        return AuthorizationDecision("DENY", "CHANGE_ACL", "OWNER_OR_MANAGER_REQUIRED", resource_id)

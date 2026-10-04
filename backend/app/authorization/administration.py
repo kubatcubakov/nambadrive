@@ -48,6 +48,8 @@ class ACLAdministrationService:
         reason: str,
         valid_from: datetime | None = None,
         valid_until: datetime | None = None,
+        *,
+        commit: bool = True,
     ) -> ACLEntry:
         await self.require(resource_id)
         now = datetime.now(UTC)
@@ -93,7 +95,8 @@ class ACLAdministrationService:
             new_acl=self.record(entry),
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return entry
 
     @staticmethod

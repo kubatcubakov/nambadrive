@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Shares } from './Shares'
+import { RequestAccess } from './AccessRequests'
 import { OfficeEditor } from './OfficeEditor'
 import { Versions } from './Versions'
 import { Upload } from './Upload'
@@ -92,6 +93,7 @@ export function Drive() {
     </form></>}
     {selected && !trash && <article>
       {permissions.includes('SHARE') && <Shares key={selected.id} documentId={selected.id} external={permissions.includes('EXTERNAL_SHARE')} />}
+      <RequestAccess key={selected.id+'-request'} documentId={selected.id} />
       <h3>{selected.name}</h3><p>{selected.mime_type} · {selected.size.toLocaleString()} байт</p>
       <dl><dt>Владелец</dt><dd>{selected.owner_user_id}</dd><dt>Отдел</dt><dd>{selected.department_id}</dd></dl>
       {permissions.includes('EDIT') && /\.(docx|xlsx|pptx)$/i.test(selected.name) && <button onClick={()=>setEditing(selected.id)}>Открыть в редакторе</button>}

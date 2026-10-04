@@ -1,19 +1,22 @@
 # Current repository state
 
-Snapshot prepared for Codex handoff on 2026-10-05.
+Implementation checkpoint: 2026-10-05. Working branch `codex/phases-5-22`, draft PR #2, stacked on unmerged phases 2–4. No production deployment or merge.
 
-Implemented:
-- Phase 0 foundation.
-- Phase 1 Authentik OIDC implementation, opaque server-side sessions, CSRF, users/session migration, basic login UI, audit login/logout/login_failed, CI migration test.
-- Phase 2 organization tables, services, administration API/UI and migration.
-- Phase 3 unified security resource tree and PostgreSQL hierarchy validation.
-- Phase 4 AuthorizationService, ACL/role bindings, scoped audited Break Glass and regression suite.
+| Phase | Implementation / validation |
+|---|---|
+| 0 | Foundation implemented |
+| 1 | OIDC/session/CSRF implemented; real user Authentik acceptance pending |
+| 2–4 | Organization, resource tree, central AuthorizationService implemented; PostgreSQL/ACL gates green |
+| 5 | Immutable S3 adapter; real SeaweedFS 4.48 and CI green |
+| 6 | Quarantine/durable AV queue; real ClamAV 1.5.4 clean/EICAR and CI green |
+| 7 | Metadata/document operations/raster preview/trash; local/PostgreSQL/CI green |
+| 8 | Numbered immutable versions/current+2; PostgreSQL concurrency and immutability checks green |
+| 9 | Signed ONLYOFFICE sessions/callbacks, create Office files; protocol/security CI green; live co-edit runtime acceptance pending |
+| 10 | Tika/OpenSearch indexing/search with fresh ACL; real engines and CI green |
+| 11 | Internal/external shares, hashed tokens, passwords/rate limits/atomic usage; PostgreSQL and real Redis CI green |
+| 12 | Owner/manager access requests, minimal discovery, temporary ACL; implemented, local/PostgreSQL gates green, CI required before Phase 13 |
+| 13–22 | Pending |
 
-Validation: 272 local backend tests passed (96.43% authorization coverage); PostgreSQL 17.11 migration roundtrip and schema drift checks passed, with 257 authorization/API/trigger tests passing. See `implementation-validation.md` for exact boundaries.
+Phase 12 validation: 407 local tests passed (10 opt-in runtime skips); PostgreSQL regression plus concurrent approval validation passed. Authorization coverage remains above 90%. Migration upgrade/check/downgrade/upgrade, Ruff/mypy/Bandit/secret/dependency checks and frontend typecheck/lint/build pass. Per-phase documentation records exact APIs and validation boundaries.
 
-Not yet implemented:
-- upload/document operations (Phase 5 storage adapter is implemented)
-- ClamAV/Tika/OpenSearch/ONLYOFFICE runtime stack
-- sharing/access requests/retention/legal hold/quotas/notifications/access reviews
-
-Real Authentik validation remains pending. Phase 5 storage adapter passed 282 local tests (two runtime-specific skips), 257 PostgreSQL tests, migration roundtrip/drift checks, Ruff, mypy, Bandit, secret scan, dependency audit and frontend gates. The separately run real SeaweedFS integration test passed. Phase 6 passed 312 local tests, 287 PostgreSQL tests and all lint/security/frontend gates. Real ClamAV 1.5.4 with official freshclam databases passed clean/EICAR tests. Phase 7 passed 330 local tests, 305 PostgreSQL tests, migration roundtrip/drift, Ruff/mypy/Bandit/secret/dependency checks and frontend gates. Phase 8 passed 336 local tests, 313 PostgreSQL tests including concurrency/immutability, migration roundtrip/drift and all lint/security/frontend gates. Phase 9 passed 353 local tests, 330 PostgreSQL tests, migration roundtrip/drift and lint/security/frontend gates. Live ONLYOFFICE browser runtime acceptance remains pending. Phase 10 passed 373 local tests, 350 PostgreSQL tests, migration roundtrip/schema drift, lint/types/security/frontend gates and real Tika extraction/no-OCR checks. Real OpenSearch engine tests passed in CI. Phase 11 passed 395 local tests, 373 PostgreSQL tests (including concurrent final-view consumption), migration roundtrip/schema drift and lint/security/frontend gates. Redis concurrency checks run in CI. Phases 12–22 remain pending. Trust code/tests and recorded validation rather than directory names.
+Release work still required: retention/hold/purge, quotas, notification delivery, complete audit/Wazuh, quarterly access review, disabled-user lifecycle, complete dashboard/Drive UI, backup/restore, deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.

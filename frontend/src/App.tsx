@@ -1,4 +1,5 @@
 import { Drive } from './Drive'
+import { AccessRequests } from './AccessRequests'
 import { ExternalShare } from './Shares'
 import { ResourceAdmin } from './ResourceAdmin'
 import { OrganizationAdmin } from './OrganizationAdmin'
@@ -96,6 +97,7 @@ export function App() {
             <OrganizationAdmin />
             <ResourceAdmin />
             <Drive />
+            <AccessRequests />
             <strong>{user.display_name}</strong>
             <span>{user.email ?? user.username}</span>
             <button type="button" onClick={() => void logout()}>

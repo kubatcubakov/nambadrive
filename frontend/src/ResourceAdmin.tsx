@@ -63,7 +63,7 @@ export function ResourceAdmin() {
     <button onClick={() => void run(async () => { await request(`/${resource}/role-bindings`, 'POST', { user_id: principal, role_name: role, valid_until: expiry ? new Date(expiry).toISOString() : null }); await loadBindings() })}>Assign role to user UUID below</button>
     <label>Principal type <select value={principalType} onChange={e => setPrincipalType(e.target.value)}><option>USER</option><option>DEPARTMENT</option><option>ROLE</option></select></label>
     <label>Principal UUID <input value={principal} onChange={e => setPrincipal(e.target.value)} /></label>
-    <label>Permission <select value={permission} onChange={e => setPermission(e.target.value)}>{'VIEW PREVIEW CREATE EDIT RENAME MOVE COPY DELETE DOWNLOAD PRINT CLIPBOARD_COPY UPLOAD_NEW_VERSION CREATE_FOLDER SHARE CHANGE_ACL VIEW_VERSION_HISTORY RESTORE_VERSION EXPORT_PDF'.split(' ').map(p => <option key={p}>{p}</option>)}</select></label>
+    <label>Permission <select value={permission} onChange={e => setPermission(e.target.value)}>{'VIEW PREVIEW CREATE EDIT RENAME MOVE COPY DELETE DOWNLOAD PRINT CLIPBOARD_COPY UPLOAD_NEW_VERSION CREATE_FOLDER SHARE CHANGE_ACL VIEW_VERSION_HISTORY RESTORE_VERSION EXPORT_PDF RESTORE EXTERNAL_SHARE REQUEST_ACCESS_DISCOVERY'.split(' ').map(p => <option key={p}>{p}</option>)}</select></label>
     <label>Effect <select value={effect} onChange={e => setEffect(e.target.value)}><option>ALLOW</option><option>DENY</option></select></label>
     <label><input type="checkbox" checked={propagate} onChange={e => setPropagate(e.target.checked)} />Propagate to children</label>
     <label>Reason <input value={reason} onChange={e => setReason(e.target.value)} /></label>
