@@ -128,7 +128,7 @@ class AuthorizationService:
         # Validate every ancestor; inheritance breaks only ordinary ACL/bindings.
         for row in chain:
             if row.state != "ACTIVE" and not (
-                row is resource and row.state == "TRASH" and permission == "PURGE"
+                row is resource and row.state == "TRASH" and permission in {"PURGE", "RESTORE"}
             ):
                 return decision(False, "RESOURCE_STATE", row.id)
             if (row.state == "TRASH") != (row.deleted_at is not None):

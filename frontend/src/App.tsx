@@ -1,4 +1,4 @@
-import { Upload } from './Upload'
+import { Drive } from './Drive'
 import { ResourceAdmin } from './ResourceAdmin'
 import { OrganizationAdmin } from './OrganizationAdmin'
 import { useCallback, useEffect, useState } from 'react'
@@ -92,7 +92,7 @@ export function App() {
           <div className="authBox">
             <OrganizationAdmin />
             <ResourceAdmin />
-            <Upload />
+            <Drive />
             <strong>{user.display_name}</strong>
             <span>{user.email ?? user.username}</span>
             <button type="button" onClick={() => void logout()}>

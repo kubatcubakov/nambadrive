@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "NambaDrive backend"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "Pillow>=12.3,<13",
+  "pypdfium2>=5.13,<6",
   "defusedxml>=0.7.1,<1",
   "boto3>=1.43,<2",
   "alembic>=1.14,<2",

@@ -53,3 +53,12 @@ dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   cursor: pointer;
   font: inherit;
 }
+
+.drive { width: 100%; text-align: left; }
+.drive nav, .drive article { margin: 1rem 0; }
+.drive button, .drive a { margin: .3rem; }
+.file-list { list-style: none; padding: 0; }
+.file-list li { border-bottom: 1px solid #dce1e8; padding: .4rem; }
+.document-preview { display: block; max-width: 100%; max-height: 75vh; object-fit: contain; }
+.drive textarea { display: block; width: 100%; min-height: 6rem; }
+.drive dd { overflow-wrap: anywhere; }
