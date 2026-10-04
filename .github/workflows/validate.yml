@@ -46,7 +46,7 @@ jobs:
           alembic check
           alembic downgrade 0002_identity_sessions
           alembic upgrade head
-      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py backend/tests/test_documents.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py backend/tests/test_documents.py backend/tests/test_versions.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
   frontend:
     runs-on: ubuntu-latest
     steps:

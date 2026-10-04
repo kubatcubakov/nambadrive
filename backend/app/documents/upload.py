@@ -14,7 +14,9 @@ from starlette.concurrency import run_in_threadpool
 from app.audit.writer import write_audit_event
 from app.authorization.service import AuthorizationService
 from app.documents.antivirus import ClamAV, ScanUnavailable
+from app.documents.service import DocumentService
 from app.documents.validation import filename, validate
+from app.documents.versions import next_sequence, promote
 from app.models.document import DocumentVersion
 from app.models.resource import Resource
 from app.models.user import User
@@ -82,6 +84,51 @@ class UploadService:
         await self.db.commit()
         return version
 
+    async def new_version(
+        self,
+        actor: User,
+        document_id: uuid.UUID,
+        name: str,
+        source: BinaryIO,
+        context: dict[str, Any],
+    ) -> DocumentVersion:
+        document = await DocumentService(self.db, actor, context).require(
+            document_id, "UPLOAD_NEW_VERSION"
+        )
+        name = filename(name)
+        if name.rsplit(".", 1)[-1].lower() != document.name.rsplit(".", 1)[-1].lower():
+            raise ValueError("New version must retain document format")
+        mime = await run_in_threadpool(validate, source, name, self.storage.max_bytes)
+        chain = await ResourceService(self.db, actor, context).ancestors(document.id)
+        version_id = uuid.uuid4()
+        info = await run_in_threadpool(
+            self.storage.put, ObjectKey(chain[-1].id, document.id, version_id), source
+        )
+        version = DocumentVersion(
+            id=version_id,
+            document_id=document.id,
+            space_id=chain[-1].id,
+            uploaded_by=actor.id,
+            filename=name,
+            mime_type=mime,
+            size=info.size,
+            sha256=info.sha256,
+            status="PENDING",
+            sequence_no=await next_sequence(self.db, document.id),
+        )
+        self.db.add(version)
+        await self.db.flush()
+        await write_audit_event(
+            "upload",
+            user=str(actor.id),
+            resource=str(document.id),
+            result="quarantined",
+            version=str(version.id),
+            **context,
+        )
+        await self.db.commit()
+        return version
+
     async def scan_one(self, scanner: ClamAV) -> bool:
         """Durable DB queue; locks prevent concurrent promotion. Retry after any outage."""
         version = await self.db.scalar(
@@ -118,8 +165,13 @@ class UploadService:
         parent_id = document.parent_id
         if parent_id is not None:
             await self.db.get(Resource, parent_id, with_for_update=True)
-        allowed = await AuthorizationService().authorize(self.db, actor, "CREATE", parent_id)
-        if document.state != "QUARANTINED" or not allowed.allowed:
+        permission, target_id = (
+            ("CREATE", parent_id)
+            if document.state == "QUARANTINED"
+            else ("UPLOAD_NEW_VERSION", document.id)
+        )
+        allowed = await AuthorizationService().authorize(self.db, actor, permission, target_id)
+        if document.state not in {"QUARANTINED", "ACTIVE"} or not allowed.allowed:
             version.status = "REJECTED"
             await write_audit_event(
                 "upload",
@@ -157,6 +209,7 @@ class UploadService:
                         raise StorageError("Promotion integrity failure") from None
                 version.status = "CLEAN"
                 document.state = "ACTIVE"
+                await promote(self.db, actor, document, version)
             else:
                 version.status = "INFECTED"
             version.scanned_at = datetime.now(UTC)

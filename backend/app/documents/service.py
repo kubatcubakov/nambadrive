@@ -44,7 +44,11 @@ class DocumentService:
     async def current(self, document_id: uuid.UUID) -> DocumentVersion:
         version = await self.db.scalar(
             select(DocumentVersion)
-            .where(DocumentVersion.document_id == document_id, DocumentVersion.status == "CLEAN")
+            .where(
+                DocumentVersion.document_id == document_id,
+                DocumentVersion.status == "CLEAN",
+                DocumentVersion.is_current.is_(True),
+            )
             .order_by(DocumentVersion.created_at.desc(), DocumentVersion.id.desc())
             .limit(1)
         )
@@ -192,6 +196,7 @@ class DocumentService:
                 size=info.size,
                 sha256=info.sha256,
                 status="CLEAN",
+                is_current=True,
                 scanned_at=version.scanned_at,
             )
         )

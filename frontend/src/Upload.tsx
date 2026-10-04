@@ -1,12 +1,12 @@
 import { useState } from 'react'
 
-export function Upload({ parentId }: { parentId?: string }) {
+export function Upload({ parentId, documentId }: { parentId?: string; documentId?: string }) {
   const [parent, setParent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   async function upload() {
-    const target = parentId || parent
+    const target = documentId || parentId || parent
     if (!files.length || !target) return
     setBusy(true)
     setStatus('Загрузка…')
@@ -17,7 +17,7 @@ export function Upload({ parentId }: { parentId?: string }) {
       let completed = 0
       for (const file of files) {
       const query = new URLSearchParams({ parent_id: target, filename: file.name })
-      const response = await fetch('/api/v1/documents/upload?' + query, {
+      const response = await fetch((documentId ? `/api/v1/documents/${documentId}/versions?` : '/api/v1/documents/upload?') + query, {
         method: 'POST', headers: { 'X-CSRF-Token': token, 'Content-Type': 'application/octet-stream' }, body: file,
       })
       if (!response.ok) throw new Error(response.status === 413 ? 'Файл превышает лимит' : 'Загрузка отклонена: проверьте права и формат файла')
@@ -29,10 +29,10 @@ export function Upload({ parentId }: { parentId?: string }) {
     finally { setBusy(false) }
   }
   return <section>
-    <h2>Загрузить файл</h2>
-    {!parentId && <label>Папка (UUID) <input value={parent} onChange={e => setParent(e.target.value)} /></label>}
+    <h2>{documentId ? 'Новая версия' : 'Загрузить файл'}</h2>
+    {!parentId && !documentId && <label>Папка (UUID) <input value={parent} onChange={e => setParent(e.target.value)} /></label>}
     <input aria-label="Выберите файл" type="file" multiple accept=".docx,.xlsx,.pptx,.pdf,.zip,.jpg,.jpeg,.png,.dwg,.psd,.txt,.csv,.json,.xml" onChange={e => setFiles(Array.from(e.target.files ?? []))} />
-    <button disabled={busy || !files.length || !(parentId || parent)} onClick={() => void upload()}>Загрузить</button>
+    <button disabled={busy || !files.length || !(documentId || parentId || parent)} onClick={() => void upload()}>Загрузить</button>
     <p role="status">{status}</p>
   </section>
 }

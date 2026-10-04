@@ -288,3 +288,64 @@ async def preview_document(
             "Content-Security-Policy": "sandbox",
         },
     )
+
+
+@router.get("/{document_id}/versions")
+async def version_history(
+    document_id: uuid.UUID, request: Request, db: Db, user: Actor
+) -> dict[str, object]:
+    from app.documents.versions import VersionService
+
+    rows = await VersionService(db, user, context(request)).history(document_id)
+    return {
+        "data": [
+            {
+                "id": row.id,
+                "number": row.sequence_no,
+                "size": row.size,
+                "sha256": row.sha256,
+                "created_at": row.created_at,
+                "is_current": row.is_current,
+                "uploaded_by": row.uploaded_by,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.post("/{document_id}/versions", status_code=202, dependencies=[Depends(require_csrf)])
+async def upload_version(
+    document_id: uuid.UUID,
+    request: Request,
+    db: Db,
+    user: Actor,
+    filename: Annotated[str, Query(min_length=1, max_length=255)],
+) -> dict[str, object]:
+    await require(db, user, "UPLOAD_NEW_VERSION", document_id)
+    settings = get_settings()
+    size = 0
+    with tempfile.TemporaryFile() as source:
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > settings.upload_max_bytes:
+                raise HTTPException(413, "Upload exceeds configured limit")
+            await run_in_threadpool(source.write, chunk)
+        version = await UploadService(db, create_storage(settings)).new_version(
+            user, document_id, filename, source, context(request)
+        )
+    return {
+        "data": {"version_id": version.id, "number": version.sequence_no, "status": version.status}
+    }
+
+
+@router.post("/{document_id}/versions/{version_id}/restore", dependencies=[Depends(require_csrf)])
+async def restore_version(
+    document_id: uuid.UUID, version_id: uuid.UUID, request: Request, db: Db, user: Actor
+) -> dict[str, object]:
+    from app.documents.versions import VersionService
+
+    await require(db, user, "RESTORE_VERSION", document_id)
+    version = await VersionService(db, user, context(request)).restore(
+        document_id, version_id, create_storage(get_settings())
+    )
+    return {"data": {"version_id": version.id, "number": version.sequence_no}}

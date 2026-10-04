@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Versions } from './Versions'
 import { Upload } from './Upload'
 
 type Item = { id: string; name: string; resource_type: string; department_id: string }
@@ -48,7 +49,7 @@ export function Drive() {
     setPreview(false); setPermissions([])
     if (item.resource_type !== 'DOCUMENT') { setPath([...path,item]); setSelected(null); return }
     const detail = await api('/documents/'+item.id) as Detail
-    const allowed = await Promise.all('PREVIEW DOWNLOAD RENAME MOVE COPY DELETE EDIT'.split(' ').map(async p => {
+    const allowed = await Promise.all('PREVIEW DOWNLOAD RENAME MOVE COPY DELETE EDIT VIEW_VERSION_HISTORY RESTORE_VERSION UPLOAD_NEW_VERSION'.split(' ').map(async p => {
       const decision = await api(`/resources/${item.id}/permissions/${p}`) as { decision: string }
       return decision.decision === 'ALLOW' ? p : ''
     }))
@@ -79,6 +80,8 @@ export function Drive() {
       {permissions.includes('RENAME') && <form onSubmit={e => {e.preventDefault(); void run(async () => {await api(`/documents/${selected.id}/rename`,'POST',{name:rename}); await reload();setSelected({...selected,name:rename})})}}><label>Имя <input value={rename} onChange={e=>setRename(e.target.value)} /></label><button>Переименовать</button></form>}
       {permissions.includes('EDIT') && <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api(`/documents/${selected.id}/metadata`,'PUT',{...selected.metadata,description,tags:tags.split(',').map(t=>t.trim()).filter(Boolean)});setStatus('Описание сохранено')})}}><label>Описание <textarea value={description} onChange={e=>setDescription(e.target.value)} /></label><label>Теги через запятую <input value={tags} onChange={e=>setTags(e.target.value)} /></label><button>Сохранить</button></form>}
       {(['move','copy'] as const).map(action=>permissions.includes(action.toUpperCase()) && <button key={action} onClick={()=>void run(async()=>{setTransfer(action);await browseDestination([])})}>{action==='move'?'Переместить':'Копировать'}</button>)}
+      {permissions.includes('UPLOAD_NEW_VERSION') && <Upload documentId={selected.id} />}
+      {permissions.includes('VIEW_VERSION_HISTORY') && <Versions key={selected.id} documentId={selected.id} canRestore={permissions.includes('RESTORE_VERSION')} />}
       {permissions.includes('DELETE') && <button onClick={()=>void run(async()=>{await api('/documents/'+selected.id,'DELETE');setSelected(null);await reload()})}>В корзину</button>}
     </article>}
     {transfer && selected && <section aria-label="Выбор папки назначения">
