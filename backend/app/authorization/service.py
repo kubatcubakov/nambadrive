@@ -16,6 +16,7 @@ from app.models.organization import (
     DepartmentMembership,
     OrganizationAdministrator,
 )
+from app.models.share import ExternalShare
 from app.models.user import User
 from app.resources.service import ResourceService
 
@@ -276,3 +277,41 @@ class AuthorizationService:
             if role is not None and permission in DEFAULTS.get(role.name, set()):
                 return decision(True, "ROLE_DEFAULT", resource.id, "ROLE", role_permission.role_id)
         return decision(False, "DEFAULT_DENY")
+
+    async def authorize_share(
+        self,
+        db: AsyncSession,
+        share: ExternalShare,
+        permission: str,
+        *,
+        password_valid: bool,
+        now: datetime | None = None,
+    ) -> AuthorizationDecision:
+        now = now or datetime.now(UTC)
+
+        def denied() -> AuthorizationDecision:
+            return AuthorizationDecision("DENY", permission, "SHARE_INVALID", share.document_id)
+
+        if (
+            not password_valid
+            or share.revoked_at is not None
+            or utc(share.created_at) > now
+            or now >= utc(share.expires_at)
+            or utc(share.expires_at) - utc(share.created_at) > timedelta(days=30)
+            or (share.max_views is not None and share.views >= share.max_views)
+            or permission not in {"PREVIEW", "DOWNLOAD"}
+            or (permission == "PREVIEW" and not share.allow_view)
+            or (permission == "DOWNLOAD" and not share.allow_download)
+        ):
+            return denied()
+        creator = await db.get(User, share.created_by, populate_existing=True)
+        if creator is None:
+            return denied()
+        # Delegation never outlives the creator's current authorization or PUBLIC policy.
+        for required in ("SHARE", "EXTERNAL_SHARE", "VIEW", permission):
+            result = await self.authorize(db, creator, required, share.document_id, now=now)
+            if not result.allowed:
+                return denied()
+        return AuthorizationDecision(
+            "ALLOW", permission, "EXTERNAL_SHARE", share.document_id, share.document_id
+        )

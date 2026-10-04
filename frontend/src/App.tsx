@@ -1,4 +1,5 @@
 import { Drive } from './Drive'
+import { ExternalShare } from './Shares'
 import { ResourceAdmin } from './ResourceAdmin'
 import { OrganizationAdmin } from './OrganizationAdmin'
 import { useCallback, useEffect, useState } from 'react'
@@ -52,7 +53,7 @@ export function App() {
   }, [loadMe])
 
   const login = () => {
-    window.location.assign('/api/v1/auth/login?next_url=/')
+    window.location.assign('/api/v1/auth/login?next_url='+encodeURIComponent(window.location.pathname+window.location.search))
   }
 
   const logout = async () => {
@@ -66,6 +67,8 @@ export function App() {
     })
     if (response.ok) setUser(null)
   }
+
+  if (window.location.pathname === '/share') return <ExternalShare />
 
   return (
     <main className="shell">

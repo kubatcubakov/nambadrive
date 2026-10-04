@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Shares } from './Shares'
 import { OfficeEditor } from './OfficeEditor'
 import { Versions } from './Versions'
 import { Upload } from './Upload'
@@ -50,16 +51,23 @@ export function Drive() {
   async function run(action: () => Promise<void>) {
     try { setStatus(''); await action() } catch (error) { setStatus(error instanceof Error ? error.message : 'Ошибка') }
   }
-  async function open(item: Item) {
+  const loadDocument = useCallback(async (id: string) => {
     setPreview(false); setPermissions([])
-    if (item.resource_type !== 'DOCUMENT') { setPath([...path,item]); setSelected(null); return }
-    const detail = await api('/documents/'+item.id) as Detail
-    const allowed = await Promise.all('PREVIEW DOWNLOAD RENAME MOVE COPY DELETE EDIT VIEW_VERSION_HISTORY RESTORE_VERSION UPLOAD_NEW_VERSION'.split(' ').map(async p => {
-      const decision = await api(`/resources/${item.id}/permissions/${p}`) as { decision: string }
+    const detail = await api('/documents/'+id) as Detail
+    const allowed = await Promise.all('PREVIEW DOWNLOAD RENAME MOVE COPY DELETE EDIT VIEW_VERSION_HISTORY RESTORE_VERSION UPLOAD_NEW_VERSION SHARE EXTERNAL_SHARE'.split(' ').map(async p => {
+      const decision = await api(`/resources/${id}/permissions/${p}`) as { decision: string }
       return decision.decision === 'ALLOW' ? p : ''
     }))
     setSelected(detail); setPermissions(allowed); setRename(detail.name)
     setDescription(detail.metadata.description ?? ''); setTags((detail.metadata.tags ?? []).join(', '))
+  }, [])
+  useEffect(()=>{
+    const id=new URLSearchParams(window.location.search).get('document')
+    if(id) void loadDocument(id).catch(()=>setStatus('Документ по ссылке недоступен'))
+  },[loadDocument])
+  async function open(item: Item) {
+    if (item.resource_type !== 'DOCUMENT') { setPath([...path,item]); setSelected(null); return }
+    await loadDocument(item.id)
   }
   async function browseDestination(next: Item[]) {
     setDestination(next)
@@ -83,6 +91,7 @@ export function Drive() {
       <select aria-label="Формат нового документа" value={newOfficeFormat} onChange={e=>setNewOfficeFormat(e.target.value)}><option value="docx">Текст</option><option value="xlsx">Таблица</option><option value="pptx">Презентация</option></select><button>Создать</button>
     </form></>}
     {selected && !trash && <article>
+      {permissions.includes('SHARE') && <Shares key={selected.id} documentId={selected.id} external={permissions.includes('EXTERNAL_SHARE')} />}
       <h3>{selected.name}</h3><p>{selected.mime_type} · {selected.size.toLocaleString()} байт</p>
       <dl><dt>Владелец</dt><dd>{selected.owner_user_id}</dd><dt>Отдел</dt><dd>{selected.department_id}</dd></dl>
       {permissions.includes('EDIT') && /\.(docx|xlsx|pptx)$/i.test(selected.name) && <button onClick={()=>setEditing(selected.id)}>Открыть в редакторе</button>}

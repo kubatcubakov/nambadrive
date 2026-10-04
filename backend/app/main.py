@@ -14,6 +14,7 @@ from app.api.v1.office import router as office_router
 from app.api.v1.organization import router as organization_router
 from app.api.v1.resources import router as resources_router
 from app.api.v1.search import router as search_router
+from app.api.v1.shares import router as shares_router
 from app.core.config import get_settings
 from app.core.database import engine
 from app.core.redis import redis_client
@@ -43,6 +44,7 @@ app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(documents_router, prefix=settings.api_v1_prefix)
 app.include_router(office_router, prefix=settings.api_v1_prefix)
 app.include_router(search_router, prefix=settings.api_v1_prefix)
+app.include_router(shares_router, prefix=settings.api_v1_prefix)
 
 
 app.include_router(organization_router, prefix=settings.api_v1_prefix)

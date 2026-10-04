@@ -233,50 +233,15 @@ async def preview_document(
     user: Actor,
     page: int = Query(default=0, ge=0, le=10000),
 ):
-    import subprocess  # nosec B404
-    import sys
-
     from fastapi.responses import Response
 
-    from app.documents.service import DocumentService, read_verified
+    from app.documents.rendering import raster_preview
+    from app.documents.service import DocumentService
 
     service = DocumentService(db, user, context(request))
     row = await service.require(document_id, "PREVIEW")
     version = await service.current(document_id)
-    if version.mime_type not in {
-        "application/pdf",
-        "image/jpeg",
-        "image/png",
-        "text/plain",
-        "text/csv",
-        "application/json",
-        "application/xml",
-    }:
-        raise HTTPException(415, "Preview unavailable for this format")
-    with tempfile.NamedTemporaryFile() as source:
-        await run_in_threadpool(read_verified, create_storage(get_settings()), version, source.file)
-        source.flush()
-
-        def render():
-            try:
-                process = subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "app.documents.preview",
-                        source.name,
-                        version.mime_type,
-                        str(page),
-                    ],
-                    capture_output=True,
-                    timeout=30,
-                    check=True,
-                )  # nosec B603
-                return process.stdout
-            except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-                raise HTTPException(422, "Preview could not be generated") from None
-
-        content = await run_in_threadpool(render)
+    content = await raster_preview(create_storage(get_settings()), version, page)
     await service.require(document_id, "PREVIEW")
     await service.audit("preview", row)
     return Response(
