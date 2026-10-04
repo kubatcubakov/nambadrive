@@ -46,7 +46,7 @@ jobs:
           alembic check
           alembic downgrade 0002_identity_sessions
           alembic upgrade head
-      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -70,3 +70,13 @@ jobs:
           python-version: '3.13'
       - run: pip install -e 'backend[dev]'
       - run: bash scripts/test-seaweed.sh
+  clamav-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y clamav-daemon
+      - run: pip install -e 'backend[dev]'
+      - run: bash scripts/test-clamav.sh

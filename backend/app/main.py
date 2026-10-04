@@ -8,12 +8,14 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.documents import router as documents_router
 from app.api.v1.health import router as health_router
 from app.api.v1.organization import router as organization_router
 from app.api.v1.resources import router as resources_router
 from app.core.config import get_settings
 from app.core.database import engine
 from app.core.redis import redis_client
+from app.storage.seaweed import StorageError
 
 settings = get_settings()
 
@@ -35,6 +37,7 @@ app = FastAPI(
 
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(documents_router, prefix=settings.api_v1_prefix)
 
 
 app.include_router(organization_router, prefix=settings.api_v1_prefix)
@@ -114,6 +117,7 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
     )
 
 
+@app.exception_handler(StorageError)
 @app.exception_handler(SQLAlchemyError)
 @app.exception_handler(OSError)
 async def unavailable(request: Request, exc: Exception) -> JSONResponse:

@@ -11,7 +11,7 @@ If a stronger coding/reasoning model is unavailable, do not intentionally downgr
 - Phase 2 Organization structure: implemented, local gates green.
 - Phase 3 Unified resource tree: implemented, local and PostgreSQL 17 gates green.
 - Phase 4 Authorization/ACL engine: implemented with a green local authorization regression suite and >=90% coverage. PostgreSQL 17 runtime validation passed; real Authentik validation remains pending. See docs/phase4-authorization.md.
-- Phase 5 immutable SeaweedFS adapter: implemented and runtime-tested against SeaweedFS 4.48. Upload/ClamAV and later business flows are still pending.
+- Phase 5 immutable SeaweedFS adapter: implemented and runtime-tested against SeaweedFS 4.48. Phase 6 upload/ClamAV is implemented with quarantine, a durable scan queue and real ClamAV validation; document operations and later phases are pending.
 
 Do not infer progress from directory names. Verify code.
 

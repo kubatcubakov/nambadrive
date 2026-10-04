@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
 
     s3_endpoint: str = "http://seaweed:8333"
+    clamav_host: str = "clamav"
+    clamav_port: int = Field(default=3310, ge=1, le=65535)
     s3_region: str = "us-east-1"
     s3_access_key: SecretStr = SecretStr("")
     s3_secret_key: SecretStr = SecretStr("")

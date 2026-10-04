@@ -16,4 +16,4 @@ Not yet implemented:
 - ClamAV/Tika/OpenSearch/ONLYOFFICE runtime stack
 - sharing/access requests/retention/legal hold/quotas/notifications/access reviews
 
-Real Authentik validation remains pending. Phase 5 storage adapter passed 282 local tests (two runtime-specific skips), 257 PostgreSQL tests, migration roundtrip/drift checks, Ruff, mypy, Bandit, secret scan, dependency audit and frontend gates. The separately run real SeaweedFS integration test passed. Phases 6–22 remain pending. Trust code/tests and recorded validation rather than directory names.
+Real Authentik validation remains pending. Phase 5 storage adapter passed 282 local tests (two runtime-specific skips), 257 PostgreSQL tests, migration roundtrip/drift checks, Ruff, mypy, Bandit, secret scan, dependency audit and frontend gates. The separately run real SeaweedFS integration test passed. Phase 6 passed 312 local tests, 287 PostgreSQL tests and all lint/security/frontend gates. Real ClamAV 1.5.4 with official freshclam databases passed clean/EICAR tests. Phases 7–22 remain pending. Trust code/tests and recorded validation rather than directory names.

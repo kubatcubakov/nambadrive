@@ -13,6 +13,7 @@ from app.models.acl import (  # noqa: F401
     RoleBinding,
     RolePermission,
 )
+from app.models.document import DocumentVersion  # noqa: F401
 from app.models.organization import (  # noqa: F401
     Company,
     Department,
