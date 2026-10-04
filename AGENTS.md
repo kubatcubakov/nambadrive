@@ -11,7 +11,7 @@ If a stronger coding/reasoning model is unavailable, do not intentionally downgr
 - Phase 2 Organization structure: implemented, local gates green.
 - Phase 3 Unified resource tree: implemented, local and PostgreSQL 17 gates green.
 - Phase 4 Authorization/ACL engine: implemented with a green local authorization regression suite and >=90% coverage. PostgreSQL 17 runtime validation passed; real Authentik validation remains pending. See docs/phase4-authorization.md.
-- No document storage, SeaweedFS, ClamAV, ONLYOFFICE, OpenSearch, share, retention, or legal-hold business logic exists yet.
+- Phase 5 immutable SeaweedFS adapter: implemented and runtime-tested against SeaweedFS 4.48. Upload/ClamAV and later business flows are still pending.
 
 Do not infer progress from directory names. Verify code.
 
@@ -153,7 +153,7 @@ ACL/security changes require both positive and negative tests. Authorization mod
 Never fail-open. DB/authz error -> deny/error, never allow.
 
 ## Current checkpoint
-Phases 2–4 are implemented. See docs/phase2-organization.md, docs/phase3-resource-tree.md and docs/phase4-authorization.md for API contracts, validation and runtime boundaries. Phase 5 has not been started.
+Phases 2–4 are implemented. See docs/phase2-organization.md, docs/phase3-resource-tree.md and docs/phase4-authorization.md for API contracts, validation and runtime boundaries. Phase 5 adapter is implemented; see docs/phase5-storage.md.
 
 Before future document/storage work, rerun the Phase 4 authorization regression suite with >=90% coverage and validate the PostgreSQL 17 migrations/triggers in CI. All approved security invariants above remain binding. Do not infer runtime validation from generated SQL or SQLite tests.
 

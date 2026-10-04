@@ -1,0 +1,9 @@
+# Phase 5 — immutable SeaweedFS adapter
+
+Server-only adapter `app.storage.seaweed` uses SigV4 and path-style S3, bounded timeouts/retries, redacted configuration, separate quarantine/data buckets, UUID-only keys and streaming reads. Every write computes SHA-256 and sends the checksum plus integrity metadata. `If-None-Match: *` prevents overwriting a version, including concurrent writers. Storage errors are sanitized and fail closed. No browser storage endpoint or presigned URL exists.
+
+The SDK is synchronous: call it in a worker or threadpool. The caller owns its seekable upload stream. This phase has no schema changes; the existing migration roundtrip and drift check remain required. The delete primitive is internal only; later retention/purge workers must enforce policy before calling it. The adapter does not itself authorize users or activate quarantined content.
+
+Runtime prerequisite: SeaweedFS **4.48**, authenticated S3 with distinct private buckets, accessible only from trusted backend/worker networks. Set `NAMBADRIVE_S3_ENDPOINT`, `NAMBADRIVE_S3_ACCESS_KEY`, `NAMBADRIVE_S3_SECRET_KEY`, `NAMBADRIVE_S3_DATA_BUCKET`, `NAMBADRIVE_S3_QUARANTINE_BUCKET`. Secrets come from deployment secret storage, never source control. Do not run an unauthenticated S3 gateway. Production topology is completed in subsequent deployment/hardening phases.
+
+Validation on 2026-10-05: actual SeaweedFS 4.48 macOS ARM binary verified against official release SHA-256; duplicate writes rejected, eight concurrent writers yielded exactly one winner, original bytes preserved, quarantine/data isolation verified and invalid credentials denied. `tests/test_storage_integration.py` requires an explicitly supplied isolated test S3 config. CI starts a pinned, SHA-256 verified Linux SeaweedFS on loopback with ephemeral credentials using `scripts/test-seaweed.sh`. It removes its test buckets and stops the server afterward.

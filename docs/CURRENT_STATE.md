@@ -12,8 +12,8 @@ Implemented:
 Validation: 272 local backend tests passed (96.43% authorization coverage); PostgreSQL 17.11 migration roundtrip and schema drift checks passed, with 257 authorization/API/trigger tests passing. See `implementation-validation.md` for exact boundaries.
 
 Not yet implemented:
-- documents/storage/SeaweedFS
+- upload/document operations (Phase 5 storage adapter is implemented)
 - ClamAV/Tika/OpenSearch/ONLYOFFICE runtime stack
 - sharing/access requests/retention/legal hold/quotas/notifications/access reviews
 
-Real Authentik validation remains pending. Phase 5 and later have not started at this checkpoint. Trust code/tests and recorded validation rather than directory names.
+Real Authentik validation remains pending. Phase 5 storage adapter passed 282 local tests (two runtime-specific skips), 257 PostgreSQL tests, migration roundtrip/drift checks, Ruff, mypy, Bandit, secret scan, dependency audit and frontend gates. The separately run real SeaweedFS integration test passed. Phases 6–22 remain pending. Trust code/tests and recorded validation rather than directory names.

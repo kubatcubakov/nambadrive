@@ -113,3 +113,12 @@ frontend-security:
     - cd frontend
     - npm ci
     - npm audit --audit-level=low
+
+seaweed-integration:
+  stage: test
+  image: python:3.13-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+    - pip install -e 'backend[dev]'
+  script:
+    - bash scripts/test-seaweed.sh

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, computed_field
+from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     oidc_state_cookie_name: str = "nambadrive_oidc_state"
     session_ttl_seconds: int = 8 * 60 * 60
     cookie_secure: bool = False
+
+    s3_endpoint: str = "http://seaweed:8333"
+    s3_region: str = "us-east-1"
+    s3_access_key: SecretStr = SecretStr("")
+    s3_secret_key: SecretStr = SecretStr("")
+    s3_data_bucket: str = "nambadrive-data"
+    s3_quarantine_bucket: str = "nambadrive-quarantine"
+    upload_max_bytes: int = Field(default=500 * 1024 * 1024, ge=1)
 
     audit_log_path: str = "/var/log/nambadrive/audit.json"
     csrf_secret: str = "dev-only-change-me"

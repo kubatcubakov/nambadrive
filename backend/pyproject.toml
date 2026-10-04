@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "NambaDrive backend"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "boto3>=1.43,<2",
   "alembic>=1.14,<2",
   "asyncpg>=0.30,<1",
   "fastapi>=0.142,<0.143",
@@ -21,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "boto3-stubs[s3]>=1.43,<2",
   "mypy>=1.15,<2",
   "aiosqlite>=0.22,<1",
   "pytest-cov>=7,<8",
