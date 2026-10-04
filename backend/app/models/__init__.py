@@ -24,3 +24,4 @@ from app.models.organization import (  # noqa: F401
     OrganizationAdministrator,
 )
 from app.models.resource import Resource  # noqa: F401
+from app.models.search import SearchCheckpoint  # noqa: F401

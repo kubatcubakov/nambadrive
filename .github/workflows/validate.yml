@@ -46,7 +46,7 @@ jobs:
           alembic check
           alembic downgrade 0002_identity_sessions
           alembic upgrade head
-      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py backend/tests/test_documents.py backend/tests/test_versions.py backend/tests/test_office.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py backend/tests/test_documents.py backend/tests/test_versions.py backend/tests/test_office.py backend/tests/test_search.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -80,3 +80,17 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y clamav-daemon
       - run: pip install -e 'backend[dev]'
       - run: bash scripts/test-clamav.sh
+  search-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: pip install -e 'backend[dev]'
+      - run: sudo sysctl -w vm.max_map_count=262144
+      - run: bash scripts/test-search.sh

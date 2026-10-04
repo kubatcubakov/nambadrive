@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { OfficeEditor } from './OfficeEditor'
 import { Versions } from './Versions'
 import { Upload } from './Upload'
+import { Search } from './Search'
 
 type Item = { id: string; name: string; resource_type: string; department_id: string }
 type Detail = Item & { size: number; mime_type: string; owner_user_id: string; sha256: string; metadata: { description?: string; tags?: string[] } }
@@ -67,6 +68,7 @@ export function Drive() {
   }
   return <section className="drive">
     <h2>Документы</h2>
+    <Search onOpen={async hit=>{setTrash(false);await open(hit)}} />
     {editing && <OfficeEditor documentId={editing} onClose={() => setEditing(null)} />}
     <nav aria-label="Документы"><button onClick={() => {setTrash(false);setPath([]);setSelected(null)}}>Общие пространства</button><button onClick={() => {setTrash(true);setSelected(null)}}>Корзина</button><button onClick={() => void run(reload)}>Обновить</button></nav>
     {!trash && <nav aria-label="Путь">{path.map((item,index) => <button key={item.id} onClick={() => {setPath(path.slice(0,index+1));setSelected(null)}}>{item.name}</button>)}</nav>}

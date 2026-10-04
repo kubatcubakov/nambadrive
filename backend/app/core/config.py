@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     office_session_seconds: int = Field(default=1800, ge=60, le=3600)
     clamav_host: str = "clamav"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
+    tika_url: str = "http://tika:9998"
+    opensearch_url: str = "https://opensearch:9200"
+    opensearch_username: str = ""
+    opensearch_password: SecretStr = SecretStr("")
+    opensearch_ca_file: str | None = None
+    search_index: str = "nambadrive-documents-v1"
+    search_text_max_bytes: int = Field(default=4 * 1024 * 1024, ge=1024, le=16 * 1024 * 1024)
     s3_region: str = "us-east-1"
     s3_access_key: SecretStr = SecretStr("")
     s3_secret_key: SecretStr = SecretStr("")
