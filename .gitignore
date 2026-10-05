@@ -31,3 +31,4 @@ frontend/vite.config.d.ts
 frontend/test-results/
 frontend/playwright-report/
 container-reports/
+acceptance-reports/

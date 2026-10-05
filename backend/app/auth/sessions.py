@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import random_urlsafe, sha256_hex
 from app.core.config import Settings
-from app.governance.policy import governance_lock
+from app.governance.policy import governance_lock, utc
 from app.models.session import ApplicationSession
 from app.models.user import User
 
@@ -62,7 +62,7 @@ async def get_session_user(
     if row is None:
         return None
     session, user = row
-    if (now - session.last_seen_at).total_seconds() >= 300:
+    if (now - utc(session.last_seen_at)).total_seconds() >= 300:
         session.last_seen_at = now
     return session, user
 
