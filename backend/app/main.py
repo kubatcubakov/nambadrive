@@ -12,6 +12,7 @@ from app.api.v1.access_requests import router as access_requests_router
 from app.api.v1.access_reviews import router as access_reviews_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.drive import router as drive_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.health import router as health_router
 from app.api.v1.lifecycle import router as lifecycle_router
@@ -48,6 +49,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(drive_router, prefix=settings.api_v1_prefix)
 app.include_router(scim_router)
 app.include_router(lifecycle_router, prefix=settings.api_v1_prefix)
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)

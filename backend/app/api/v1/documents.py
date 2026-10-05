@@ -74,16 +74,29 @@ async def document_metadata(
 ) -> dict[str, object]:
     from app.api.v1.resources import serialize
     from app.documents.service import DocumentService
+    from app.governance.policy import governance_lock
     from app.models.metadata import DocumentMetadata
 
+    await governance_lock(db)
     service = DocumentService(db, user, context(request))
     row = await service.require(document_id, "VIEW")
     version = await service.current(document_id)
     metadata = await db.get(DocumentMetadata, document_id)
     await service.audit("view", row)
+    from app.drive.service import DriveService
+
+    await DriveService(db, user, context(request)).viewed(row.id)
+    from app.models.organization import Department
+    from app.models.user import User
+
+    owner = await db.get(User, row.owner_user_id)
+    department = await db.get(Department, row.department_id)
+    await db.commit()
     return {
         "data": {
             **serialize(row),
+            "owner_name": owner.display_name if owner else None,
+            "department_name": department.name if department else None,
             "version_id": version.id,
             "size": version.size,
             "sha256": version.sha256,

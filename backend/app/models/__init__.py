@@ -16,6 +16,7 @@ from app.models.acl import (  # noqa: F401
     RolePermission,
 )
 from app.models.document import DocumentVersion  # noqa: F401
+from app.models.drive import Favorite, RecentDocument  # noqa: F401
 from app.models.governance import LegalHoldEvent, RetentionPolicy  # noqa: F401
 from app.models.lifecycle import IdentityPolicy, OwnershipTransfer  # noqa: F401
 from app.models.metadata import DocumentMetadata  # noqa: F401
