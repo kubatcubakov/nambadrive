@@ -187,6 +187,60 @@ async def test_disabled_login_provisioning_and_token_fail_closed(db, scene, monk
     assert AuthorizationService.identity_integration(TOKEN, TOKEN)
 
 
+async def test_oidc_jit_creates_identity_without_grants_with_scim_enabled(db, scene, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "scim_token", SecretStr(TOKEN))
+    monkeypatch.setattr(get_settings(), "oidc_jit_provisioning", True)
+    owner = scene[0]
+    # Matching a profile must never bind to that user's immutable identity.
+    account = await upsert_oidc_user(
+        db,
+        {
+            "sub": "new-jit-immutable-sub",
+            "preferred_username": owner.username,
+            "email": owner.email,
+            "name": "New JIT user",
+        },
+    )
+    assert account.id != owner.id
+    assert account.authentik_sub == "new-jit-immutable-sub" and account.enabled
+    assert not (
+        await db.scalars(select(RoleBinding).where(RoleBinding.user_id == account.id))
+    ).all()
+    assert not (
+        await db.scalars(
+            select(OrganizationAdministrator).where(OrganizationAdministrator.user_id == account.id)
+        )
+    ).all()
+    assert not (
+        await db.scalars(select(DepartmentManager).where(DepartmentManager.user_id == account.id))
+    ).all()
+    assert not (await AuthorizationService().authorize(db, account, "VIEW", scene[4].id)).allowed
+    assert not (
+        await AuthorizationService().authorize(db, account, "DOWNLOAD", scene[4].id)
+    ).allowed
+    again = await upsert_oidc_user(
+        db, {"sub": account.authentik_sub, "preferred_username": "renamed-jit"}
+    )
+    assert again.id == account.id and again.username == "renamed-jit"
+
+
+async def test_oidc_jit_cannot_reenable_scim_disabled_identity(db, scene, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "scim_token", SecretStr(TOKEN))
+    monkeypatch.setattr(get_settings(), "oidc_jit_provisioning", True)
+    account = await upsert_oidc_user(db, {"sub": "jit-disabled-sub"})
+    await LifecycleService(db, "authentik_scim").synchronize(
+        account.authentik_sub, account.username, account.display_name, None, False
+    )
+    with pytest.raises(HTTPException) as error:
+        await upsert_oidc_user(db, {"sub": account.authentik_sub})
+    assert error.value.status_code == 403 and error.value.detail == "Account disabled"
+    assert not account.enabled
+
+
 async def test_identity_admin_has_no_content_authority_and_requires_csrf(api, db, scene, admin):
     client, state = api
     assert (await client.get("/api/v1/identity")).status_code == 403

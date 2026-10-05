@@ -30,7 +30,8 @@ async def upsert_oidc_user(db: AsyncSession, claims: dict[str, Any]) -> User:
     if user is not None and not user.enabled:
         raise HTTPException(403, "Account disabled")
     if user is None:
-        if get_settings().scim_token.get_secret_value():
+        settings = get_settings()
+        if settings.scim_token.get_secret_value() and not settings.oidc_jit_provisioning:
             raise HTTPException(403, "Account provisioning required")
         user = User(
             authentik_sub=sub,

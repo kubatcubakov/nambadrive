@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     oidc_discovery_url: str = ""
     oidc_client_id: str = ""
     oidc_client_secret: str = Field(default="", repr=False)
+    oidc_jit_provisioning: bool = False
     oidc_allowed_algorithms: list[str] = ["RS256"]
     oidc_transaction_ttl_seconds: int = 600
     oidc_clock_skew_seconds: int = 60
