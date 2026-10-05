@@ -6,6 +6,7 @@ import io
 import json
 import os
 import secrets
+import re
 import signal
 import shutil
 import socket
@@ -25,18 +26,21 @@ PYTHON = sys.executable
 
 
 def run(argv, **kwargs):
-    return (
-        subprocess.run(
-            [str(x) for x in argv],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=180,
-            **kwargs,
-        )
-        .stdout.decode()
-        .strip()
+    result = subprocess.run(
+        [str(x) for x in argv],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=180,
+        **kwargs,
     )
+    if result.returncode:
+        # Only the CLI's bounded exception class is diagnostic; never print provider
+        # output, DSNs, object bytes, credentials or arbitrary exception text.
+        match = re.search(rb"Backup/restore failed \(([A-Za-z][A-Za-z0-9]{0,63})\)", result.stderr)
+        kind = match.group(1).decode() if match else "SubprocessFailure"
+        raise RuntimeError(f"Isolated restore subprocess failed: {kind}")
+    return result.stdout.decode().strip()
 
 
 def wait_port(port):
@@ -87,7 +91,7 @@ def main():
         keyfile.write_bytes(secrets.token_bytes(32))
         keyfile.chmod(0o600)
         from app.backup.repository import build, publish, restore, key_file
-        from app.backup.cli import command
+        from app.backup.cli import command, verify_object
         from app.core.config import get_settings
         from app.storage.seaweed import create_storage, Area, ObjectKey, StorageError
         from app.models.user import User
@@ -459,9 +463,17 @@ def main():
                             Area.DATA if index == 0 else Area.QUARANTINE,
                         )
                         assert info.size == len(payloads[index])
-                        assert (
-                            info.sha256 == hashlib.sha256(payloads[index]).hexdigest()
-                        )
+                        expected_hash = hashlib.sha256(payloads[index]).hexdigest()
+                        assert info.sha256 == expected_hash
+                        # HEAD reads filer metadata, while GET also needs recovered volume
+                        # routing. Require a real full-content read before invoking CLI.
+                        assert verify_object(
+                            storage,
+                            ObjectKey(space, documents[index], versions[index]),
+                            Area.DATA if index == 0 else Area.QUARANTINE,
+                            len(payloads[index]),
+                            expected_hash,
+                        ) == len(payloads[index])
                     break
                 except StorageError:
                     if weed.poll() is not None or attempt == 89:
