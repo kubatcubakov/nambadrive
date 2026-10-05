@@ -81,6 +81,9 @@ export function Drive({
   const [showAcl, setShowAcl] = useState(false);
   const [newOfficeName, setNewOfficeName] = useState("");
   const [newOfficeFormat, setNewOfficeFormat] = useState("docx");
+  const [detailTab, setDetailTab] = useState("info");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [preview, setPreview] = useState(false);
   const [rename, setRename] = useState("");
   const [description, setDescription] = useState("");
@@ -120,6 +123,7 @@ export function Drive({
   }, [listPath]);
   useEffect(() => {
     let active = true;
+    setParentPermissions([]);
     if (parentId)
       api(`/resources/${parentId}/capabilities`)
         .then((p) => {
@@ -142,6 +146,7 @@ export function Drive({
   }
   const loadDocument = useCallback(async (id: string) => {
     setPreview(false);
+    setDetailTab("info");
     setPermissions([]);
     setSelected(null);
     setShowAcl(false);
@@ -182,6 +187,9 @@ export function Drive({
       setPage(1);
       setPath([...path, item]);
       setSelected(null);
+      setCreateOpen(false);
+      setUploadOpen(false);
+      setParentPermissions([]);
       return;
     }
     await loadDocument(item.id);
@@ -203,10 +211,10 @@ export function Drive({
           await open(hit);
         }}
       />
-      {editing && (
-        <OfficeEditor documentId={editing} onClose={() => setEditing(null)} />
-      )}
-      <nav aria-label="Документы">
+      <nav className="drive-toolbar" aria-label="Документы">
+        <div className="folder-title"><span className="eyebrow">Рабочее пространство</span><h2>{parent?.name ?? "Файлы и пространства"}</h2></div>
+        {!trash && parent && (parentPermissions.includes("CREATE") || parentPermissions.includes("CREATE_FOLDER")) && <button aria-expanded={createOpen} onClick={() => setCreateOpen(!createOpen)}>＋ Создать</button>}
+        {!trash && parent && parentPermissions.includes("CREATE") && <button className="primary" aria-expanded={uploadOpen} onClick={() => setUploadOpen(!uploadOpen)}>Загрузить файлы</button>}
         <button onClick={() => void run(reload)}>Обновить</button>
         {path.length > 0 && (
           <button
@@ -237,7 +245,7 @@ export function Drive({
       )}
       <p role="status">{status}</p>
       {!searchOnly && (
-        <ul className="file-list">
+        <><div className="file-table-heading" aria-hidden="true"><span>Название</span><span>Владелец / отдел</span><span>Размер</span><span /></div><ul className="file-list">
           {rows.map((item) => (
             <li key={item.id}>
               {trash ? (
@@ -278,16 +286,14 @@ export function Drive({
                   {item.favorite ? "★" : "☆"}
                 </button>
               )}
-              <small>
+              <small className="file-owner">
                 {item.owner_name}{" "}
                 {item.department_name && " · " + item.department_name}{" "}
-                {item.size !== undefined &&
-                  item.size !== null &&
-                  " · " + item.size.toLocaleString() + " байт"}
               </small>
+              <span className="file-size">{item.size != null ? new Intl.NumberFormat("ru", { style: "unit", unit: "kilobyte", maximumFractionDigits: 1 }).format(item.size / 1024) : "—"}</span>
             </li>
           ))}
-        </ul>
+        </ul></>
       )}
       {!searchOnly && !parentId && (
         <nav aria-label="Страницы">
@@ -327,7 +333,7 @@ export function Drive({
               )}
             </>
           )}
-          {parentPermissions.includes("CREATE_FOLDER") && (
+          {createOpen && parentPermissions.includes("CREATE_FOLDER") && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -355,11 +361,11 @@ export function Drive({
               <button>Создать папку</button>
             </form>
           )}
-          {parentPermissions.includes("CREATE") && (
+          {uploadOpen && parentPermissions.includes("CREATE") && (
             <Upload key={parent.id} parentId={parent.id} />
           )}
 
-          {parentPermissions.includes("CREATE") && (
+          {createOpen && parentPermissions.includes("CREATE") && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -397,18 +403,39 @@ export function Drive({
         </>
       )}
       {selected && !trash && (
-        <article>
-          {permissions.includes("SHARE") && (
-            <Shares
-              key={selected.id}
-              documentId={selected.id}
-              external={permissions.includes("EXTERNAL_SHARE")}
-            />
-          )}
-          <h3>{selected.name}</h3>
+        <article className="document-detail">
+          <div className="document-heading"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><h3>{selected.name}</h3><button aria-label="Закрыть документ" onClick={() => {setSelected(null); setPreview(false); setEditing(null)}}>✕</button></div>
           <p>
             {selected.mime_type} · {selected.size.toLocaleString()} байт
           </p>
+
+          {permissions.includes("EDIT") &&
+            /\.(docx|xlsx|pptx)$/i.test(selected.name) && (
+              <button className="primary" onClick={() => setEditing(selected.id)}>
+                Открыть в редакторе
+              </button>
+            )}
+          {permissions.includes("PREVIEW") && ["application/pdf", "image/jpeg", "image/png", "text/plain", "text/csv", "application/json", "application/xml"].includes(selected.mime_type) && (
+            <button onClick={() => setPreview(!preview)}>Предпросмотр</button>
+          )}
+          {permissions.includes("DOWNLOAD") && (
+            <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>
+          )}
+          <div className="document-body"><div className="document-canvas">
+          {editing === selected.id ? <OfficeEditor documentId={editing} onClose={() => setEditing(null)} /> : !preview && <div className="preview-placeholder"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><strong>{selected.name}</strong><p>{/\.(docx|xlsx|pptx)$/i.test(selected.name) ? "Откройте документ в ONLYOFFICE с помощью кнопки выше." : "Выберите «Предпросмотр», чтобы увидеть содержимое, если формат поддерживается."}</p></div>}
+          {preview && (
+            <img
+              className="document-preview"
+              src={`/api/v1/documents/${selected.id}/preview`}
+              alt="Предпросмотр документа"
+              onError={() =>
+                setStatus("Предпросмотр для этого файла недоступен")
+              }
+            />
+          )}
+          </div><aside className="document-sidebar">
+          <nav className="tabs" aria-label="Панель документа">{[["info", "Сведения"], ["access", "Доступ"], ["versions", "Версии"]].map(([key, label]) => <button key={key} aria-current={detailTab === key ? "page" : undefined} onClick={() => setDetailTab(key)}>{label}</button>)}</nav>
+          <section hidden={detailTab !== "info"}>
           <dl>
             <dt>Владелец</dt>
             <dd>
@@ -423,28 +450,7 @@ export function Drive({
                 selected.department_id}
             </dd>
           </dl>
-          {permissions.includes("EDIT") &&
-            /\.(docx|xlsx|pptx)$/i.test(selected.name) && (
-              <button onClick={() => setEditing(selected.id)}>
-                Открыть в редакторе
-              </button>
-            )}
-          {permissions.includes("PREVIEW") && (
-            <button onClick={() => setPreview(!preview)}>Предпросмотр</button>
-          )}
-          {permissions.includes("DOWNLOAD") && (
-            <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>
-          )}
-          {preview && (
-            <img
-              className="document-preview"
-              src={`/api/v1/documents/${selected.id}/preview`}
-              alt="Предпросмотр документа"
-              onError={() =>
-                setStatus("Предпросмотр для этого файла недоступен")
-              }
-            />
-          )}
+          {!permissions.includes("EDIT") && <p>{selected.metadata.description || "Описание не добавлено"}</p>}
           {permissions.includes("RENAME") && (
             <form
               onSubmit={(e) => {
@@ -566,6 +572,8 @@ export function Drive({
                 </button>
               ),
           )}
+          </section>
+          <section hidden={detailTab !== "versions"}>
           {permissions.includes("UPLOAD_NEW_VERSION") && (
             <Upload documentId={selected.id} />
           )}
@@ -574,6 +582,15 @@ export function Drive({
               key={selected.id}
               documentId={selected.id}
               canRestore={permissions.includes("RESTORE_VERSION")}
+            />
+          )}
+          </section>
+          <section hidden={detailTab !== "access"}>
+          {permissions.includes("SHARE") && (
+            <Shares
+              key={selected.id}
+              documentId={selected.id}
+              external={permissions.includes("EXTERNAL_SHARE")}
             />
           )}
           {permissions.includes("CHANGE_ACL") && (
@@ -651,6 +668,7 @@ export function Drive({
               />
             </details>
           )}
+          </section>
           {permissions.includes("DELETE") && (
             <button
               onClick={() =>
@@ -664,6 +682,7 @@ export function Drive({
               В корзину
             </button>
           )}
+          </aside></div>
         </article>
       )}
       {transfer && selected && (

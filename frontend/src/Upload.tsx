@@ -28,9 +28,10 @@ export function Upload({ parentId, documentId }: { parentId?: string; documentId
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Ошибка загрузки') }
     finally { setBusy(false) }
   }
-  return <section>
+  return <section className="upload-card">
     <h2>{documentId ? 'Новая версия' : 'Загрузить файл'}</h2>
     {!parentId && !documentId && <label>Папка (UUID) <input value={parent} onChange={e => setParent(e.target.value)} /></label>}
+    <p className="muted">{documentId ? "Замените содержимое этого документа файлом того же формата. Предыдущая версия сохранится в истории." : "Выберите один или несколько файлов. Доступ появится после антивирусной проверки."}</p>
     <input aria-label="Выберите файл" type="file" multiple accept=".docx,.xlsx,.pptx,.pdf,.zip,.jpg,.jpeg,.png,.dwg,.psd,.txt,.csv,.json,.xml" onChange={e => setFiles(Array.from(e.target.files ?? []))} />
     <button disabled={busy || !files.length || !(documentId || parentId || parent)} onClick={() => void upload()}>Загрузить</button>
     <p role="status">{status}</p>

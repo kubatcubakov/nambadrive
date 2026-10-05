@@ -155,3 +155,55 @@ test("mobile layout and revoked document do not retain stale detail", async ({
     page.getByText("Операция недоступна: проверьте права и данные"),
   ).toBeVisible();
 });
+
+test("organization uses named choices and submits the existing assignment contract", async ({ page }, info) => {
+  await fixture(page, true);
+  let assignment: unknown;
+  await page.route("**/api/v1/admin/organization**", async route => {
+    if (route.request().method() === "PUT") assignment = route.request().postDataJSON();
+    await route.fulfill({json:{data:{companies:[{id,name:"NAMBAGROUP"}],departments:[{id,name:"IT",company_id:id,parent_id:null}],department_memberships:[{user_id:id,department_id:id,kind:"SECONDARY"}],department_managers:[]}}});
+  });
+  await page.route("**/api/v1/identity", route=>route.fulfill({json:{data:{users:[{id,display_name:"Айгуль",enabled:true}]}}}));
+  await page.goto("/");
+  await page.getByRole("button",{name:"Администрирование",exact:true}).click();
+  await page.getByRole("button",{name:"Организация",exact:true}).click();
+  await page.getByRole("button",{name:"▰ IT",exact:true}).click();
+  await expect(page.getByRole("cell",{name:"Дополнительный отдел"})).toBeVisible();
+  await page.getByLabel("Сотрудник",{exact:true}).selectOption(id);
+  const request=page.waitForRequest(r=>r.url().endsWith(`/departments/${id}/assignments`) && r.method()==="PUT");
+  await page.getByRole("button",{name:"Назначить",exact:true}).click();
+  const sent=await request;
+  expect(sent.headers()["x-csrf-token"]).toBe("ui-test-only");
+  await expect(page.getByRole("status")).toHaveText("Изменения сохранены");
+  expect(assignment).toEqual({user_id:id,kind:"SECONDARY",valid_until:null});
+  await page.getByRole("button",{name:"Структура",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Создать отдел",exact:true})).toBeDisabled();
+  await page.screenshot({path:info.outputPath("organization.png"),fullPage:true});
+});
+
+test("folder upload is distinct from a new version and unsupported office preview is hidden", async ({page},info)=>{
+  await fixture(page);
+  const folder="22222222-2222-4222-8222-222222222222";
+  const space={id:folder,name:"Документы IT",resource_type:"SPACE",department_id:id,owner_name:"Айгуль",department_name:"IT"};
+  await page.route("**/api/v1/drive?*",r=>r.fulfill({json:{data:[space]}}));
+  await page.route(`**/api/v1/resources?parent_id=${folder}`,r=>r.fulfill({json:{data:[{...doc,name:"Договор.docx"}]}}));
+  await page.route(`**/api/v1/resources/${folder}/capabilities`,r=>r.fulfill({json:{data:["VIEW","CREATE","CREATE_FOLDER"]}}));
+  await page.route(`**/api/v1/resources/${id}/capabilities`,r=>r.fulfill({json:{data:["VIEW","PREVIEW","EDIT","UPLOAD_NEW_VERSION","VIEW_VERSION_HISTORY"]}}));
+  await page.route(`**/api/v1/documents/${id}`,r=>r.fulfill({json:{data:{...doc,name:"Договор.docx",mime_type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",metadata:{},classification:"INTERNAL",inherit_acl:true}}}));
+  await page.route("**/api/v1/documents/upload?*",r=>r.fulfill({json:{data:{status:"PENDING"}}}));
+  await page.goto("/");
+  await page.getByRole("button",{name:"Документы IT",exact:false}).click();
+  await page.getByRole("button",{name:"Загрузить файлы",exact:true}).click();
+  await page.getByLabel("Выберите файл").setInputFiles({name:"проверка.txt",mimeType:"text/plain",buffer:Buffer.from("Test")});
+  const upload=page.waitForRequest(r=>r.url().includes("/documents/upload?") && r.method()==="POST");
+  await page.getByRole("button",{name:"Загрузить",exact:true}).click();
+  expect(new URL((await upload).url()).searchParams.get("parent_id")).toBe(folder);
+  await expect(page.getByText("Принято файлов: 1. Они появятся в папке после антивирусной проверки.")).toBeVisible();
+  await page.getByRole("button",{name:"Договор.docx",exact:false}).click();
+  await expect(page.getByRole("button",{name:"Предпросмотр",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Открыть в редакторе",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).not.toBeVisible();
+  await page.getByRole("button",{name:"Версии",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath("file-workspace.png"),fullPage:true});
+});

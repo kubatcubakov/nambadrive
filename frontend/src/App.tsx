@@ -158,7 +158,7 @@ export function App() {
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <div className="brand">▣ NambaDrive</div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true">▰</span> NambaDrive</div>
         <nav aria-label="Основная навигация">
           {navigation.map(([key, icon, label]) => (
             <button
@@ -183,14 +183,14 @@ export function App() {
           )}
         </nav>
         <div className="sidebar-user">
-          <strong>{user.display_name}</strong>
+          <span className="avatar" aria-hidden="true">{user.display_name.slice(0, 1)}</span><strong>{user.display_name}</strong>
           <button onClick={() => void logout()}>Выйти</button>
         </div>
       </aside>
       <main className="workspace">
         <header className="workspace-header">
           <h1>{title}</h1>
-          <span>{user.display_name}</span>
+          <div className="header-actions"><button aria-label="Открыть поиск" onClick={() => setView("search")}>⌕ Поиск</button><button aria-label="Открыть уведомления" onClick={() => setView("notifications")}>♧ Уведомления</button></div>
         </header>
         <p role="status">{error}</p>
         {[
