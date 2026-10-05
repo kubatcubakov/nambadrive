@@ -12,6 +12,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.health import router as health_router
+from app.api.v1.notifications import router as notifications_router
 from app.api.v1.office import router as office_router
 from app.api.v1.organization import router as organization_router
 from app.api.v1.quotas import router as quotas_router
@@ -42,6 +43,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(governance_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)

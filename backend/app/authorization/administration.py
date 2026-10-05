@@ -57,7 +57,14 @@ class ACLAdministrationService:
         if (
             permission
             not in PERMISSIONS
-            - {"CREATE_SPACE", "PURGE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD", "MANAGE_QUOTAS"}
+            - {
+                "CREATE_SPACE",
+                "PURGE",
+                "MANAGE_RETENTION",
+                "MANAGE_LEGAL_HOLD",
+                "MANAGE_QUOTAS",
+                "RECEIVE_ADMIN_ALERTS",
+            }
             or effect not in {"ALLOW", "DENY"}
             or not reason.strip()
             or not (applies_to_self or propagate_to_children)

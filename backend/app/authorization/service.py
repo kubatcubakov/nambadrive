@@ -122,6 +122,7 @@ class AuthorizationService:
                 "MANAGE_RETENTION",
                 "MANAGE_LEGAL_HOLD",
                 "MANAGE_QUOTAS",
+                "RECEIVE_ADMIN_ALERTS",
             } and await self.system_admin(db, user, now):
                 return decision(True, "SYSTEM_ADMIN_CONFIGURATION")
             return decision(False, "RESOURCE_INVALID")
@@ -130,7 +131,13 @@ class AuthorizationService:
         except ValueError:
             return decision(False, "RESOURCE_INVALID")
         resource = chain[0]
-        if permission in {"CREATE_SPACE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD", "MANAGE_QUOTAS"}:
+        if permission in {
+            "CREATE_SPACE",
+            "MANAGE_RETENTION",
+            "MANAGE_LEGAL_HOLD",
+            "MANAGE_QUOTAS",
+            "RECEIVE_ADMIN_ALERTS",
+        }:
             return decision(False, "INVALID_OPERATION")
         # Validate every ancestor; inheritance breaks only ordinary ACL/bindings.
         for row in chain:

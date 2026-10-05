@@ -1,4 +1,5 @@
 import { Drive } from './Drive'
+import { Notifications } from './Notifications'
 import { Quotas } from './Quotas'
 import { Governance } from './Governance'
 import { AccessRequests } from './AccessRequests'
@@ -102,6 +103,7 @@ export function App() {
             <AccessRequests />
             <Governance />
             <Quotas />
+            <Notifications />
             <strong>{user.display_name}</strong>
             <span>{user.email ?? user.username}</span>
             <button type="button" onClick={() => void logout()}>

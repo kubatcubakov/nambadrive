@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     s3_quarantine_bucket: str = "nambadrive-quarantine"
     upload_max_bytes: int = Field(default=500 * 1024 * 1024, ge=1)
 
+    smtp_host: str = ""
+    smtp_port: int = Field(default=465, ge=1, le=65535)
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
+    smtp_ca_file: str | None = None
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_admin_chat_id: SecretStr = SecretStr("")
+
     audit_log_path: str = "/var/log/nambadrive/audit.json"
     csrf_secret: str = "dev-only-change-me"
 
