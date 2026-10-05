@@ -193,3 +193,12 @@ async def test_durable_audit_failure_prevents_backup_publication(tmp_path, sourc
     with pytest.raises(OSError):
         await cli.execute(args)
     assert all(path.name.startswith(".incomplete-") for path in repository.iterdir())
+
+
+def test_backup_cannot_publish_manifest_that_restore_would_refuse(tmp_path, sources, monkeypatch):
+    from app.backup import repository
+
+    monkeypatch.setattr(repository, "MAX_MANIFEST_BYTES", 128)
+    with pytest.raises(BackupError):
+        build(tmp_path / "repository", os.urandom(32), sources, "AIO")
+    assert all(path.name.startswith(".incomplete-") for path in (tmp_path / "repository").iterdir())

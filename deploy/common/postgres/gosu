@@ -1,0 +1,3 @@
+#!/bin/sh
+# Preserve the vendor UID/GID drop contract without an obsolete Go runtime helper.
+exec /sbin/su-exec "$@"

@@ -8,10 +8,19 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2]
 images = json.loads((root / "deploy/common/images.lock.json").read_text())
 scanner = images.pop("trivy")
+# Scan the actual deployed derivatives including their inherited base files, not unused
+# upstream images which the profile no longer runs (patched gateway and UID-drop helper).
+images.pop("nginx")
+images.pop("postgres")
+images.pop("redis")
+images.pop("opensearch")
 reports = root / "container-reports"
 reports.mkdir(exist_ok=True)
-# Caller builds the four application/runtime derivatives before scanning them.
+# Caller builds the application/runtime derivatives before scanning them.
 images.update(
+    gateway="nambadrive/gateway:ci",
+    redis="nambadrive/redis:ci",
+    opensearch="nambadrive/opensearch:ci",
     backend="nambadrive/backend:ci",
     frontend="nambadrive/frontend:ci",
     tika="nambadrive/tika:ci",

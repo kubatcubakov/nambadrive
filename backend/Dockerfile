@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 nambadrive \
     && useradd --system --uid 10001 --gid nambadrive --create-home nambadrive \
     && mkdir -p /var/log/nambadrive \
@@ -16,7 +18,7 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 
-RUN pip install --no-cache-dir -r requirements.lock && pip install --no-cache-dir --no-deps .
+RUN pip install --no-cache-dir -r requirements.lock && pip install --no-cache-dir --no-deps . && pip uninstall -y pip
 
 USER nambadrive
 

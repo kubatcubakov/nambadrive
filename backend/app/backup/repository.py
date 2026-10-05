@@ -17,6 +17,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 CHUNK = 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 PROFILES = {
     "AIO": {"postgres", "wal", "audit", "seaweed_single"},
     "PROD-COMPACT": {
@@ -186,10 +187,13 @@ def build(
     manifest["hmac"] = hmac.new(
         purpose_key(key, b"manifest"), canonical(manifest), hashlib.sha256
     ).hexdigest()
+    encoded = canonical(manifest)
+    if len(encoded) > MAX_MANIFEST_BYTES:
+        raise BackupError("Manifest exceeds restore limit: snapshot cannot be published")
     path = staging / "manifest.json"
     with path.open("xb") as output:
         os.chmod(path, 0o600)
-        output.write(canonical(manifest))
+        output.write(encoded)
         output.flush()
         os.fsync(output.fileno())
     fsync_directory(staging)
@@ -212,7 +216,7 @@ def load(snapshot: Path, key: bytes) -> dict[str, Any]:
     private_directory(snapshot)
     path = snapshot / "manifest.json"
     regular_source(path)
-    if path.stat().st_size > 64 * 1024 * 1024:
+    if path.stat().st_size > MAX_MANIFEST_BYTES:
         raise BackupError("Manifest too large")
     try:
         manifest = json.loads(path.read_bytes())

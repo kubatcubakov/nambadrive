@@ -10,9 +10,10 @@ cleanup() {
   rm -rf "$runtime"
 }
 trap cleanup EXIT
-curl -fsSL --retry 3 https://downloads.apache.org/tika/3.3.2/tika-server-standard-3.3.2.jar -o "$runtime/tika.jar"
-printf '%s  %s\n' fb1f2fe57ac458b09d44d41d816f582e1d2fc93488acff6275caf414d8d5ef94e42166edc0b488dc2fb6ef3aa21fab62b107c43b9060385ff6d675e393c2c9e9 "$runtime/tika.jar" | sha512sum -c -
-java -jar "$runtime/tika.jar" --host 127.0.0.1 --port 19998 >"$runtime/tika.log" 2>&1 &
+curl -fsSL --retry 3 https://downloads.apache.org/tika/4.1.0/tika-server-standard-4.1.0.zip -o "$runtime/tika.zip"
+printf '%s  %s\n' c932f84c569fb02df4f72ab060d6f2cf77b6797417040202401bc256e18a8f6f0ebc25d12d6dce222cb9328abfcb388cfa6511d7382c765a45687240a8a4bd7e "$runtime/tika.zip" | sha512sum -c -
+unzip -q "$runtime/tika.zip" -d "$runtime/tika"
+java -jar "$runtime/tika/tika-server-standard-4.1.0.jar" --config deploy/common/tika/config.json --host 127.0.0.1 --port 19998 >"$runtime/tika.log" 2>&1 &
 tika_pid=$!
 # Security plugin disabled ONLY in this isolated, data-free engine contract test.
 # App-level ACL checks are tested below; production TLS/auth are separate hardening gates.

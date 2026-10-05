@@ -30,7 +30,7 @@ server {
         proxy_pass http://backend:8000;
         include /etc/nginx/proxy-private.conf;
     }
-    location ^~ /api/v1/public/ {
+    location = /api/v1/shares/access {
         limit_req zone=share_limit burst=20 nodelay;
         proxy_pass http://backend:8000;
         include /etc/nginx/proxy-private.conf;

@@ -268,9 +268,14 @@ def main() -> None:
 
     try:
         asyncio.run(run())
-    except Exception:
+    except Exception as error:
         # No DB connection strings, secrets, provider responses or document bytes in CLI logs.
-        parser.exit(1, "Backup/restore failed; inspect private infrastructure diagnostics.\n")
+        parser.exit(
+            1,
+            "Backup/restore failed ("
+            + type(error).__name__
+            + "); inspect private infrastructure diagnostics.\n",
+        )
 
 
 if __name__ == "__main__":

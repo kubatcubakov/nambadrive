@@ -79,7 +79,8 @@ services:
     tmpfs:
     - /tmp:rw,noexec,nosuid,size=512m
     mem_limit: 1g
-    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    build:
+      context: ../common/postgres
     user: '0'
     profiles:
     - bootstrap

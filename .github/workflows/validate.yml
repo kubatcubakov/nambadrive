@@ -136,11 +136,24 @@ jobs:
           for file in deploy/aio/compose.yml deploy/prod-compact/*.compose.yml deploy/prod-distributed/*.compose.yml; do
             docker compose --env-file deploy/common/.env.example -f "$file" config --quiet
           done
+      - run: docker build -t nambadrive/gateway:ci deploy/common/gateway
+      - run: docker build -t nambadrive/redis:ci deploy/common/redis
+      - run: docker build -t nambadrive/opensearch:ci deploy/common/opensearch
       - run: docker build -t nambadrive/backend:ci backend
       - run: docker build -t nambadrive/frontend:ci frontend
       - run: docker build -t nambadrive/tika:ci deploy/common/tika
       - run: docker build -t nambadrive/postgres:ci deploy/common/postgres
       - run: docker build -t nambadrive/office:ci deploy/common/office
+      - name: Patched PostgreSQL startup and UID-drop contract
+        run: |
+          docker run -d --name nd-pg-hardening -e POSTGRES_PASSWORD=isolated-ci-only nambadrive/postgres:ci
+          trap 'docker rm -f nd-pg-hardening >/dev/null' EXIT
+          for attempt in $(seq 1 60); do
+            if docker exec nd-pg-hardening pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec nd-pg-hardening pg_isready -U postgres
+          docker exec nd-pg-hardening gosu postgres psql -U postgres -Atc 'SELECT 1' | grep -qx 1
       - name: Container vulnerability gate (no unresolved Critical)
         run: python scripts/deploy/scan_containers.py
       - uses: actions/upload-artifact@v4

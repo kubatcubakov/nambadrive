@@ -50,7 +50,8 @@ services:
     - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
     - /var/run:rw,noexec,nosuid,uid=101,gid=101
     mem_limit: 1g
-    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    build:
+      context: ../common/gateway
     user: '101'
     ports: []
     networks:
@@ -87,7 +88,8 @@ services:
     - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
     - /var/run:rw,noexec,nosuid,uid=101,gid=101
     mem_limit: 1g
-    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    build:
+      context: ../common/gateway
     user: '101'
     ports:
     - ${PUBLIC_IP:?}:443:8443

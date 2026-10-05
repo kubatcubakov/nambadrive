@@ -89,7 +89,7 @@ def main():
         from app.backup.repository import build, publish, restore, key_file
         from app.backup.cli import command
         from app.core.config import get_settings
-        from app.storage.seaweed import create_storage, Area, ObjectKey
+        from app.storage.seaweed import create_storage, Area, ObjectKey, StorageError
         from app.models.user import User
         from app.models.organization import Company, Department
         from app.models.resource import Resource
@@ -450,6 +450,23 @@ def main():
             os.environ["NAMBADRIVE_DATABASE_URL"] = (
                 f"postgresql+asyncpg://{__import__('getpass').getuser()}@/restore_ci?host={restored_sock}&port=15434"
             )
+            # A listening gateway is not proof that recovered master/volume maps are ready.
+            for attempt in range(90):
+                try:
+                    for index in range(2):
+                        info = storage.stat(
+                            ObjectKey(space, documents[index], versions[index]),
+                            Area.DATA if index == 0 else Area.QUARANTINE,
+                        )
+                        assert info.size == len(payloads[index])
+                        assert (
+                            info.sha256 == hashlib.sha256(payloads[index]).hexdigest()
+                        )
+                    break
+                except StorageError:
+                    if weed.poll() is not None or attempt == 89:
+                        raise
+                    time.sleep(1)
             # Separate process guarantees settings/engine point only at the restored environment.
             result = json.loads(
                 run(

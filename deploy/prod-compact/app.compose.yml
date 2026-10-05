@@ -15,7 +15,8 @@ services:
     - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
     - /var/run:rw,noexec,nosuid,uid=101,gid=101
     mem_limit: 1g
-    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    build:
+      context: ../common/gateway
     user: '101'
     ports:
     - ${PUBLIC_IP:?}:80:8080
@@ -52,7 +53,8 @@ services:
     - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
     - /var/run:rw,noexec,nosuid,uid=101,gid=101
     mem_limit: 1g
-    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    build:
+      context: ../common/gateway
     user: '101'
     ports:
     - ${PRIVATE_IP:?}:9443:9443
@@ -87,7 +89,8 @@ services:
     - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
     - /var/run:rw,noexec,nosuid,uid=101,gid=101
     mem_limit: 1g
-    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    build:
+      context: ../common/gateway
     user: '101'
     ports:
     - ${PRIVATE_IP:?}:8444:8444
@@ -485,7 +488,8 @@ services:
     tmpfs:
     - /tmp:rw,noexec,nosuid,size=512m
     mem_limit: 256m
-    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    build:
+      context: ../common/redis
     user: '999'
     networks:
     - cache

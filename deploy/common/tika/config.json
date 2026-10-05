@@ -1,0 +1,10 @@
+{
+  "text-recognizers": [],
+  "server": {
+    "allowPipes": false,
+    "allowPerRequestConfig": false,
+    "endpoints": [
+      "tika"
+    ]
+  }
+}
