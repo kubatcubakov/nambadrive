@@ -94,3 +94,5 @@ Phases 2–4 are implemented: company/department hierarchy, membership and manag
 Validation includes SQLite and PostgreSQL 17 migrations, schema drift checks, ACL/API regressions, >=90% authorization coverage, lint/typechecks and dependency/security scans. Real Authentik deployment validation remains pending. See [the validation report](docs/implementation-validation.md).
 
 The next approved phase is Phase 5, the SeaweedFS storage adapter. Document content operations must preserve the authorization gate and all approved controls.
+
+Phase 22 acceptance contracts and runtime boundaries: [docs/phase22-acceptance.md](docs/phase22-acceptance.md). Phase 21 all nine CI gates are green. All ten Phase 22 CI jobs are green at the documented checkpoint; final CI must remain green and external UAT acceptance is required before release; no merge or production deployment has been performed.

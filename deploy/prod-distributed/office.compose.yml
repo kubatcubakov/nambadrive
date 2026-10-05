@@ -1,0 +1,130 @@
+# Same application/schema in every profile. Private host bindings require firewall/WireGuard preflight.
+name: nambadrive-prod-distributed-office
+services:
+  onlyoffice:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: false
+    pids_limit: 1024
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 6g
+    build:
+      context: ../common/office
+    cap_add:
+    - CHOWN
+    - SETUID
+    - SETGID
+    - DAC_OVERRIDE
+    - NET_BIND_SERVICE
+    networks:
+      app:
+        ipv4_address: 172.29.0.20
+    cpus: 4
+    environment:
+      JWT_ENABLED: 'true'
+      JWT_HEADER: Authorization
+      JWT_IN_BODY: 'false'
+      ALLOW_PRIVATE_IP_ADDRESS: 'true'
+      NODE_EXTRA_CA_CERTS: /tls/ca-bundle.crt
+    volumes:
+    - ${TRUST_DIR:?}:/tls:ro
+    - ${OFFICE_CONFIG_FILE:?}:/run/private/office-local.json:ro
+    - office_data:/var/www/onlyoffice/Data
+    - office_cache:/var/lib/onlyoffice
+    - office_logs:/var/log/onlyoffice
+  office-relay:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    build:
+      context: ../common/gateway
+    user: '101'
+    ports: []
+    networks:
+      app:
+        aliases:
+        - ${BACKCHANNEL_DOMAIN:?}
+      egress: {}
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/office-relay.conf.template:/etc/nginx/templates/office-relay.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
+    - ${TRUST_DIR:?}:/trust:ro
+  office-gateway:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    build:
+      context: ../common/gateway
+    user: '101'
+    ports:
+    - ${PUBLIC_IP:?}:443:8443
+    networks:
+    - app
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/office.conf.template:/etc/nginx/templates/office.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
+networks:
+  app:
+    internal: true
+    ipam:
+      config:
+      - subnet: 172.29.0.0/24
+  services:
+    internal: true
+  cache:
+    internal: true
+  av:
+    internal: true
+  parser:
+    internal: true
+  egress: {}
+volumes:
+  office_data: {}
+  office_cache: {}
+  office_logs: {}

@@ -20,6 +20,10 @@ jobs:
   postgres-migrations:
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
       postgres:
         image: postgres:17
         env:
@@ -34,6 +38,7 @@ jobs:
     env:
       NAMBADRIVE_DATABASE_URL: postgresql+asyncpg://nambadrive:ci-only-password@localhost:5432/nambadrive_ci
       NAMBADRIVE_TEST_POSTGRES: '1'
+      NAMBADRIVE_TEST_REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,7 +51,7 @@ jobs:
           alembic check
           alembic downgrade 0002_identity_sessions
           alembic upgrade head
-      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py backend/tests/test_upload.py backend/tests/test_documents.py backend/tests/test_versions.py backend/tests/test_office.py backend/tests/test_search.py backend/tests/test_shares.py backend/tests/test_access_requests.py backend/tests/test_governance.py backend/tests/test_quotas.py backend/tests/test_notifications.py backend/tests/test_audit.py backend/tests/test_access_reviews.py backend/tests/test_lifecycle.py backend/tests/test_drive.py backend/tests/test_hardening.py backend/tests/test_acceptance_identity.py backend/tests/test_acceptance_routes.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -60,4 +65,149 @@ jobs:
           npm run typecheck
           npm run lint
           npm run build
+          npx playwright install --with-deps chromium
+          npm run test:ui
           npm audit --audit-level=low
+  seaweed-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -e 'backend[dev]'
+      - run: bash scripts/test-seaweed.sh
+  clamav-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y clamav-daemon
+      - run: pip install -e 'backend[dev]'
+      - run: bash scripts/test-clamav.sh
+  search-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: pip install -e 'backend[dev]'
+      - run: sudo sysctl -w vm.max_map_count=262144
+      - run: bash scripts/test-search.sh
+  wazuh-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-wazuh.sh
+  backup-restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install PostgreSQL 17 from official PGDG repository
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17
+      - run: pip install -e 'backend[dev]'
+      - run: bash scripts/test-backup-ci.sh
+  deployment-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -e 'backend[dev]'
+      - run: python scripts/deploy/check_profiles.py
+      - run: |
+          for file in deploy/aio/compose.yml deploy/prod-compact/*.compose.yml deploy/prod-distributed/*.compose.yml; do
+            docker compose --env-file deploy/common/.env.example -f "$file" config --quiet
+          done
+      - run: docker build -t nambadrive/gateway:ci deploy/common/gateway
+      - run: docker build -t nambadrive/redis:ci deploy/common/redis
+      - run: docker build -t nambadrive/clamav:ci deploy/common/clamav
+      - run: docker build -t nambadrive/opensearch:ci deploy/common/opensearch
+      - run: docker build -t nambadrive/backend:ci backend
+      - run: docker build -t nambadrive/frontend:ci frontend
+      - run: docker build -t nambadrive/tika:ci deploy/common/tika
+      - run: docker build -t nambadrive/postgres:ci deploy/common/postgres
+      - run: docker build -t nambadrive/office:ci deploy/common/office
+      - name: Patched PostgreSQL startup and UID-drop contract
+        run: |
+          docker run -d --name nd-pg-hardening -e POSTGRES_PASSWORD=isolated-ci-only nambadrive/postgres:ci
+          trap 'docker rm -f nd-pg-hardening >/dev/null' EXIT
+          for attempt in $(seq 1 60); do
+            if docker exec nd-pg-hardening pg_isready -h 127.0.0.1 -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec nd-pg-hardening pg_isready -h 127.0.0.1 -U postgres
+          docker exec nd-pg-hardening gosu postgres psql -U postgres -Atc 'SELECT 1' | grep -qx 1
+      - name: Container vulnerability gate (no Critical or High authorization bypass)
+        run: python scripts/deploy/scan_containers.py
+      - name: ZAP isolated HTTPS application baseline
+        run: bash scripts/acceptance/zap.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-zap
+          path: acceptance-reports/zap.*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-security-reports
+          path: container-reports
+
+  acceptance-load:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nambadrive_acceptance
+          POSTGRES_USER: nambadrive
+          POSTGRES_PASSWORD: isolated-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nambadrive -d nambadrive_acceptance"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NAMBADRIVE_DATABASE_URL: postgresql+asyncpg://nambadrive:isolated-ci-only@localhost:5432/nambadrive_acceptance
+      NAMBADRIVE_ACCEPTANCE_ISOLATED: '1'
+      NAMBADRIVE_AUDIT_LOG_PATH: /tmp/nd-load-audit/audit.json
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -e 'backend[dev]'
+      - working-directory: backend
+        run: alembic upgrade head
+      - run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 18778 --no-access-log >/tmp/nd-load-http.log 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18778/api/v1/health/live >/dev/null; then break; fi
+            sleep 1
+          done
+          python scripts/acceptance/load.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-performance
+          path: acceptance-reports/load.json

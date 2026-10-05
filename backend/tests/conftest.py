@@ -1,5 +1,6 @@
 import os
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import get_settings
 from app.models import Base
 from app.models.acl import Permission, Role, RolePermission
+from app.models.quota import QuotaIncident, StorageReservation
 
 
 @pytest_asyncio.fixture
@@ -26,6 +28,11 @@ async def db():
             )() as session:
                 yield session
             await transaction.rollback()
+        # Autonomous write-journal rows intentionally survive request rollback.
+        # This database is disposable; clear test-only journals between isolated fixtures.
+        async with engine.begin() as cleanup:
+            await cleanup.execute(delete(StorageReservation))
+            await cleanup.execute(delete(QuotaIncident))
     else:
 
         @event.listens_for(engine.sync_engine, "connect")
@@ -37,3 +44,13 @@ async def db():
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             yield session
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def isolated_audit_path(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "app.audit.writer.get_settings",
+        lambda: SimpleNamespace(audit_log_path=str(tmp_path / "audit.jsonl")),
+    )

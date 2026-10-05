@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.authorization.catalog import BREAK_GLASS_PERMISSIONS, DEFAULTS, PERMISSIONS, SENSITIVE
 from app.models.acl import ACLEntry, BreakGlassGrant, HardPolicy, Role, RoleBinding, RolePermission
+from app.models.document import DocumentVersion
 from app.models.organization import (
     Company,
     Department,
@@ -16,6 +19,7 @@ from app.models.organization import (
     DepartmentMembership,
     OrganizationAdministrator,
 )
+from app.models.share import ExternalShare
 from app.models.user import User
 from app.resources.service import ResourceService
 
@@ -51,9 +55,23 @@ class AuthorizationDecision:
 
 
 class AuthorizationService:
+    @staticmethod
+    def identity_integration(configured: str, supplied: str) -> bool:
+        # Compare fixed-length digests; a missing/weak configuration never enables provisioning.
+        return len(configured) >= 43 and hmac.compare_digest(
+            hashlib.sha256(configured.encode()).digest(), hashlib.sha256(supplied.encode()).digest()
+        )
+
     async def organization_admin(self, db: AsyncSession, user: User) -> bool:
-        stored = await db.scalar(select(User).where(User.id == user.id, User.enabled.is_(True)))
-        return stored is not None and await db.get(OrganizationAdministrator, user.id) is not None
+        stored = await db.scalar(
+            select(User)
+            .execution_options(populate_existing=True)
+            .where(User.id == user.id, User.enabled.is_(True))
+        )
+        return (
+            stored is not None
+            and await db.get(OrganizationAdministrator, user.id, populate_existing=True) is not None
+        )
 
     async def system_admin(self, db: AsyncSession, user: User, now: datetime) -> bool:
         if not user.enabled:
@@ -61,6 +79,7 @@ class AuthorizationService:
         bindings = (
             await db.scalars(
                 select(RoleBinding)
+                .execution_options(populate_existing=True)
                 .join(Role)
                 .where(
                     RoleBinding.user_id == user.id,
@@ -102,20 +121,31 @@ class AuthorizationService:
 
         if not session_valid or not user.enabled:
             return decision(False, "USER_INVALID")
-        stored = await db.scalar(select(User).where(User.id == user.id, User.enabled.is_(True)))
+        stored = await db.scalar(
+            select(User)
+            .execution_options(populate_existing=True)
+            .where(User.id == user.id, User.enabled.is_(True))
+        )
         if stored is None:
             return decision(False, "USER_INVALID")
         if permission not in PERMISSIONS:
             return decision(False, "UNKNOWN_PERMISSION")
         if resource_id is None:
             global_policy = await db.scalar(
-                select(HardPolicy).where(
-                    HardPolicy.resource_id.is_(None), HardPolicy.permission_id == permission
-                )
+                select(HardPolicy)
+                .execution_options(populate_existing=True)
+                .where(HardPolicy.resource_id.is_(None), HardPolicy.permission_id == permission)
             )
             if global_policy is not None:
                 return decision(False, "HARD_POLICY")
-            if permission == "CREATE_SPACE" and await self.system_admin(db, user, now):
+            if permission in {
+                "CREATE_SPACE",
+                "MANAGE_RETENTION",
+                "MANAGE_LEGAL_HOLD",
+                "MANAGE_QUOTAS",
+                "MANAGE_IDENTITY",
+                "RECEIVE_ADMIN_ALERTS",
+            } and await self.system_admin(db, user, now):
                 return decision(True, "SYSTEM_ADMIN_CONFIGURATION")
             return decision(False, "RESOURCE_INVALID")
         try:
@@ -123,18 +153,31 @@ class AuthorizationService:
         except ValueError:
             return decision(False, "RESOURCE_INVALID")
         resource = chain[0]
-        if permission == "CREATE_SPACE":
+        if permission in {
+            "CREATE_SPACE",
+            "MANAGE_RETENTION",
+            "MANAGE_LEGAL_HOLD",
+            "MANAGE_QUOTAS",
+            "MANAGE_IDENTITY",
+            "RECEIVE_ADMIN_ALERTS",
+        }:
             return decision(False, "INVALID_OPERATION")
         # Validate every ancestor; inheritance breaks only ordinary ACL/bindings.
         for row in chain:
+            if row.purge_started_at is not None:
+                return decision(False, "RESOURCE_PURGE_STARTED", row.id)
+            if row.purged_at is not None:
+                return decision(False, "RESOURCE_PURGED", row.id)
             if row.state != "ACTIVE" and not (
-                row is resource and row.state == "TRASH" and permission == "PURGE"
+                row is resource and row.state == "TRASH" and permission in {"PURGE", "RESTORE"}
             ):
                 return decision(False, "RESOURCE_STATE", row.id)
             if (row.state == "TRASH") != (row.deleted_at is not None):
                 return decision(False, "RESOURCE_STATE", row.id)
-            dept = await db.get(Department, row.department_id)
-            company = await db.get(Company, dept.company_id) if dept else None
+            dept = await db.get(Department, row.department_id, populate_existing=True)
+            company = (
+                await db.get(Company, dept.company_id, populate_existing=True) if dept else None
+            )
             if dept is None or not dept.enabled or company is None or not company.enabled:
                 return decision(False, "ORGANIZATION_DISABLED", row.id)
         # Validate department hierarchy before grants; manager scope includes its ancestors.
@@ -144,13 +187,17 @@ class AuthorizationService:
             if current_dept in department_ids:
                 return decision(False, "ORGANIZATION_INVALID")
             department_ids.add(current_dept)
-            dept = await db.get(Department, current_dept)
+            dept = await db.get(Department, current_dept, populate_existing=True)
             if dept is None or not dept.enabled:
                 return decision(False, "ORGANIZATION_DISABLED")
             current_dept = dept.parent_id
         ids = {row.id for row in chain}
         policies = (
-            await db.scalars(select(HardPolicy).where(HardPolicy.permission_id == permission))
+            await db.scalars(
+                select(HardPolicy)
+                .execution_options(populate_existing=True)
+                .where(HardPolicy.permission_id == permission)
+            )
         ).all()
         for policy in policies:
             if policy.resource_id is None or policy.resource_id in ids:
@@ -163,11 +210,29 @@ class AuthorizationService:
                     return decision(False, "LEGAL_HOLD", row.id)
                 if row.retention_until and now < utc(row.retention_until):
                     return decision(False, "RETENTION", row.id)
+            from app.governance.policy import deadline
+
+            versions = (
+                await db.scalars(
+                    select(DocumentVersion)
+                    .execution_options(populate_existing=True)
+                    .where(
+                        DocumentVersion.document_id == resource.id,
+                        DocumentVersion.purged_at.is_(None),
+                    )
+                )
+            ).all()
+            for version in versions:
+                expiry = await deadline(db, version, chain)
+                if expiry is not None and now < expiry:
+                    return decision(False, "RETENTION", resource.id)
             if resource.deleted_at is None or now < utc(resource.deleted_at) + timedelta(days=30):
                 return decision(False, "TRASH_PERIOD")
         grants = (
             await db.scalars(
-                select(BreakGlassGrant).where(
+                select(BreakGlassGrant)
+                .execution_options(populate_existing=True)
+                .where(
                     BreakGlassGrant.user_id == user.id,
                     BreakGlassGrant.permission_id == permission,
                     BreakGlassGrant.resource_id.in_(ids),
@@ -188,7 +253,9 @@ class AuthorizationService:
                 return decision(True, "OWNER", row.id, "USER", user.id)
         managers = (
             await db.scalars(
-                select(DepartmentManager).where(
+                select(DepartmentManager)
+                .execution_options(populate_existing=True)
+                .where(
                     DepartmentManager.user_id == user.id,
                     DepartmentManager.department_id.in_(department_ids),
                 )
@@ -204,7 +271,11 @@ class AuthorizationService:
         bindings = [
             binding
             for binding in (
-                await db.scalars(select(RoleBinding).where(RoleBinding.user_id == user.id))
+                await db.scalars(
+                    select(RoleBinding)
+                    .execution_options(populate_existing=True)
+                    .where(RoleBinding.user_id == user.id)
+                )
             ).all()
             if active(binding, now)
             and (binding.resource_id is None or binding.resource_id in scope)
@@ -213,21 +284,23 @@ class AuthorizationService:
         # Administrative role labels never imply document permissions. Explicit ACL may grant them.
         memberships = (
             await db.scalars(
-                select(DepartmentMembership).where(DepartmentMembership.user_id == user.id)
+                select(DepartmentMembership)
+                .execution_options(populate_existing=True)
+                .where(DepartmentMembership.user_id == user.id)
             )
         ).all()
         member_ids: set[uuid.UUID] = set()
         for membership in memberships:
-            dept = await db.get(Department, membership.department_id)
+            dept = await db.get(Department, membership.department_id, populate_existing=True)
             if dept and dept.enabled:
-                company = await db.get(Company, dept.company_id)
+                company = await db.get(Company, dept.company_id, populate_existing=True)
                 if company and company.enabled:
                     member_ids.add(dept.id)
         entries = (
             await db.scalars(
-                select(ACLEntry).where(
-                    ACLEntry.resource_id.in_(scope), ACLEntry.permission_id == permission
-                )
+                select(ACLEntry)
+                .execution_options(populate_existing=True)
+                .where(ACLEntry.resource_id.in_(scope), ACLEntry.permission_id == permission)
             )
         ).all()
         applicable = [
@@ -263,6 +336,7 @@ class AuthorizationService:
         role_permissions = (
             await db.scalars(
                 select(RolePermission)
+                .execution_options(populate_existing=True)
                 .join(Role)
                 .where(
                     RolePermission.role_id.in_(role_ids),
@@ -272,7 +346,163 @@ class AuthorizationService:
             )
         ).all()
         for role_permission in role_permissions:
-            role = await db.get(Role, role_permission.role_id)
+            role = await db.get(Role, role_permission.role_id, populate_existing=True)
             if role is not None and permission in DEFAULTS.get(role.name, set()):
                 return decision(True, "ROLE_DEFAULT", resource.id, "ROLE", role_permission.role_id)
         return decision(False, "DEFAULT_DENY")
+
+    async def authorize_share(
+        self,
+        db: AsyncSession,
+        share: ExternalShare,
+        permission: str,
+        *,
+        password_valid: bool,
+        now: datetime | None = None,
+    ) -> AuthorizationDecision:
+        now = now or datetime.now(UTC)
+
+        def denied() -> AuthorizationDecision:
+            return AuthorizationDecision("DENY", permission, "SHARE_INVALID", share.document_id)
+
+        if (
+            not password_valid
+            or share.revoked_at is not None
+            or utc(share.created_at) > now
+            or now >= utc(share.expires_at)
+            or utc(share.expires_at) - utc(share.created_at) > timedelta(days=30)
+            or (share.max_views is not None and share.views >= share.max_views)
+            or permission not in {"PREVIEW", "DOWNLOAD"}
+            or (permission == "PREVIEW" and not share.allow_view)
+            or (permission == "DOWNLOAD" and not share.allow_download)
+        ):
+            return denied()
+        creator = await db.get(User, share.created_by, populate_existing=True)
+        if creator is None:
+            return denied()
+        # Delegation never outlives the creator's current authorization or PUBLIC policy.
+        for required in ("SHARE", "EXTERNAL_SHARE", "VIEW", permission):
+            result = await self.authorize(db, creator, required, share.document_id, now=now)
+            if not result.allowed:
+                return denied()
+        return AuthorizationDecision(
+            "ALLOW", permission, "EXTERNAL_SHARE", share.document_id, share.document_id
+        )
+
+    async def authorize_discovery(
+        self,
+        db: AsyncSession,
+        user: User,
+        resource_id: uuid.UUID,
+    ) -> AuthorizationDecision:
+        # Discovery is an explicit, metadata-only ACL capability, never a default grant.
+        result = await self.authorize(db, user, "REQUEST_ACCESS_DISCOVERY", resource_id)
+        if not result.allowed:
+            return result
+        chain = await ResourceService(db, user, {}).ancestors(resource_id)
+        if any(row.classification == "STRICTLY_CONFIDENTIAL" for row in chain):
+            return AuthorizationDecision(
+                "DENY", "REQUEST_ACCESS_DISCOVERY", "STRICT_DISCOVERY_HIDDEN", resource_id
+            )
+        return result
+
+    async def authorize_request_approval(
+        self,
+        db: AsyncSession,
+        user: User,
+        resource_id: uuid.UUID,
+    ) -> AuthorizationDecision:
+        result = await self.authorize(db, user, "CHANGE_ACL", resource_id)
+        if result.allowed and result.reason in {"OWNER", "DEPARTMENT_MANAGER"}:
+            return result
+        return AuthorizationDecision("DENY", "CHANGE_ACL", "OWNER_OR_MANAGER_REQUIRED", resource_id)
+
+    async def authorize_cleanup(
+        self,
+        db: AsyncSession,
+        version: DocumentVersion,
+        *,
+        quarantine_only: bool = False,
+        now: datetime | None = None,
+    ) -> AuthorizationDecision:
+        """Trusted worker policy entry point. Never exposed as a user permission bypass."""
+        from app.governance.policy import chain, deadline
+        from app.models.office import OfficeRoom
+
+        now = now or datetime.now(UTC)
+
+        def result(allow: bool, reason: str) -> AuthorizationDecision:
+            return AuthorizationDecision(
+                "ALLOW" if allow else "DENY", "PURGE", reason, version.document_id
+            )
+
+        if version.purged_at is not None:
+            return result(False, "VERSION_PURGED")
+        try:
+            ancestors = await chain(db, version.document_id)
+        except ValueError:
+            return result(False, "RESOURCE_INVALID")
+        ids = [row.id for row in ancestors]
+        policies = (
+            await db.scalars(
+                select(HardPolicy)
+                .execution_options(populate_existing=True)
+                .where(HardPolicy.permission_id == "PURGE")
+            )
+        ).all()
+        if any(policy.resource_id is None or policy.resource_id in ids for policy in policies):
+            return result(False, "HARD_POLICY")
+        if any(row.legal_hold for row in ancestors):
+            return result(False, "LEGAL_HOLD")
+        expiry = await deadline(db, version, ancestors)
+        if expiry is not None and now < expiry:
+            return result(False, "RETENTION")
+        document = ancestors[0]
+        if document.resource_type != "DOCUMENT" or document.purged_at is not None:
+            return result(False, "RESOURCE_INVALID")
+        if quarantine_only:
+            if (
+                version.quarantine_purged_at is not None
+                or version.status != "CLEAN"
+                or version.scanned_at is None
+            ):
+                return result(False, "QUARANTINE_NOT_ELIGIBLE")
+            return result(now >= utc(version.scanned_at) + timedelta(days=30), "QUARANTINE_PERIOD")
+        pin = await db.scalar(
+            select(OfficeRoom)
+            .where(
+                OfficeRoom.base_version_id == version.id,
+                OfficeRoom.closed_at.is_(None),
+                OfficeRoom.expires_at > now,
+            )
+            .limit(1)
+        )
+        if pin is not None:
+            return result(False, "EDITOR_VERSION_PIN")
+        if document.state == "TRASH" and document.deleted_at is not None:
+            return result(now >= utc(document.deleted_at) + timedelta(days=30), "TRASH_PERIOD")
+        if version.status in {"INFECTED", "REJECTED"}:
+            return result(
+                now >= utc(version.scanned_at or version.created_at) + timedelta(days=30),
+                "QUARANTINE_PERIOD",
+            )
+        if version.status == "CLEAN" and not version.is_current and version.prune_after is not None:
+            newer = await db.scalar(
+                select(func.count())
+                .select_from(DocumentVersion)
+                .where(
+                    DocumentVersion.document_id == version.document_id,
+                    DocumentVersion.status == "CLEAN",
+                    DocumentVersion.purged_at.is_(None),
+                    DocumentVersion.purge_started_at.is_(None),
+                    DocumentVersion.sequence_no > version.sequence_no,
+                )
+            )
+            return result(
+                (newer or 0) >= 3 and now >= utc(version.prune_after), "VERSION_TRASH_PERIOD"
+            )
+        return result(False, "CLEANUP_NOT_ELIGIBLE")
+
+    async def account_self(self, db: AsyncSession, user: User, subject_id: uuid.UUID) -> bool:
+        stored = await db.scalar(select(User.id).where(User.id == user.id, User.enabled.is_(True)))
+        return user.enabled and stored is not None and subject_id == user.id

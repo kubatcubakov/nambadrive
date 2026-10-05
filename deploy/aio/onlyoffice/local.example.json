@@ -1,0 +1,15 @@
+{
+  "services": {
+    "CoAuthoring": {
+      "secret": {
+        "browser": {"string": "CHANGE_ME_BROWSER_SECRET"},
+        "inbox": {"string": "CHANGE_ME_BROWSER_SECRET"},
+        "outbox": {"string": "CHANGE_ME_DISTINCT_OUTBOX_SECRET"}
+      },
+      "token": {
+        "enable": {"browser": true, "request": {"inbox": true, "outbox": true}},
+        "outbox": {"header": "Authorization", "prefix": "Bearer ", "inBody": false, "expires": "5m"}
+      }
+    }
+  }
+}

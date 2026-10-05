@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.writer import write_audit_event
 from app.authorization.catalog import BREAK_GLASS_PERMISSIONS, PERMISSIONS
 from app.authorization.service import AuthorizationService
+from app.governance.policy import governance_lock
 from app.models.acl import ACLEntry, BreakGlassGrant, Role, RoleBinding
 from app.models.organization import Department
 from app.models.resource import Resource
@@ -23,6 +24,7 @@ class ACLAdministrationService:
         self.authz = AuthorizationService()
 
     async def require(self, resource_id: uuid.UUID) -> None:
+        await governance_lock(self.db)
         await self.db.get(Resource, resource_id, with_for_update=True)
         result = await self.authz.authorize(self.db, self.actor, "CHANGE_ACL", resource_id)
         if not result.allowed:
@@ -48,12 +50,24 @@ class ACLAdministrationService:
         reason: str,
         valid_from: datetime | None = None,
         valid_until: datetime | None = None,
+        *,
+        commit: bool = True,
     ) -> ACLEntry:
         await self.require(resource_id)
         now = datetime.now(UTC)
         valid_from = valid_from or now
         if (
-            permission not in PERMISSIONS - {"CREATE_SPACE", "PURGE"}
+            permission
+            not in PERMISSIONS
+            - {
+                "CREATE_SPACE",
+                "PURGE",
+                "MANAGE_RETENTION",
+                "MANAGE_LEGAL_HOLD",
+                "MANAGE_QUOTAS",
+                "MANAGE_IDENTITY",
+                "RECEIVE_ADMIN_ALERTS",
+            }
             or effect not in {"ALLOW", "DENY"}
             or not reason.strip()
             or not (applies_to_self or propagate_to_children)
@@ -63,7 +77,7 @@ class ACLAdministrationService:
         model = {"USER": User, "DEPARTMENT": Department, "ROLE": Role}.get(principal_type)
         if model is None:
             raise ValueError("Invalid principal")
-        principal = await self.db.get(model, principal_id)
+        principal = await self.db.get(model, principal_id, populate_existing=True)
         if principal is None or (
             isinstance(principal, User | Department) and not principal.enabled
         ):
@@ -93,14 +107,17 @@ class ACLAdministrationService:
             new_acl=self.record(entry),
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return entry
 
     @staticmethod
     def record(entry: ACLEntry) -> dict[str, str]:
         return {column.name: str(getattr(entry, column.name)) for column in entry.__table__.columns}
 
-    async def revoke(self, resource_id: uuid.UUID, entry_id: uuid.UUID) -> None:
+    async def revoke(
+        self, resource_id: uuid.UUID, entry_id: uuid.UUID, *, commit: bool = True
+    ) -> None:
         await self.require(resource_id)
         entry = await self.db.get(ACLEntry, entry_id, with_for_update=True)
         if entry is None or entry.resource_id != resource_id:
@@ -117,11 +134,13 @@ class ACLAdministrationService:
             new_acl=self.record(entry),
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
 
     async def break_glass(
         self, resource_id: uuid.UUID, permission: str, reason: str, minutes: int
     ) -> BreakGlassGrant:
+        await governance_lock(self.db)
         now = datetime.now(UTC)
         decision = await self.authz.authorize(self.db, self.actor, "CREATE_SPACE", None, now=now)
         if not decision.allowed:
@@ -173,7 +192,7 @@ class ACLAdministrationService:
             raise ValueError("Role is not assignable through resource ACL administration")
         if valid_until is not None and valid_until <= now:
             raise ValueError("Role expiry must be in the future")
-        subject = await self.db.get(User, user_id)
+        subject = await self.db.get(User, user_id, populate_existing=True)
         role = await self.db.scalar(select(Role).where(Role.name == role_name))
         if subject is None or not subject.enabled or role is None:
             raise ValueError("Role subject unavailable")
@@ -201,7 +220,9 @@ class ACLAdministrationService:
         await self.db.commit()
         return binding
 
-    async def revoke_binding(self, resource_id: uuid.UUID, binding_id: uuid.UUID) -> None:
+    async def revoke_binding(
+        self, resource_id: uuid.UUID, binding_id: uuid.UUID, *, commit: bool = True
+    ) -> None:
         await self.require(resource_id)
         binding = await self.db.get(RoleBinding, binding_id, with_for_update=True)
         if binding is None or binding.resource_id != resource_id:
@@ -223,4 +244,5 @@ class ACLAdministrationService:
             new_acl=new,
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()

@@ -98,6 +98,9 @@ async def get_resource(resource_id: uuid.UUID, db: Db, user: Actor) -> dict[str,
 async def create_resource(
     payload: ResourceInput, request: Request, db: Db, user: Actor
 ) -> dict[str, object]:
+    from app.governance.policy import governance_lock
+
+    await governance_lock(db)
     permission = (
         "CREATE_SPACE"
         if payload.resource_type == "SPACE"
@@ -192,3 +195,77 @@ async def revoke_binding(
         resource_id, binding_id
     )
     return {"data": {"revoked": True}}
+
+
+class SecurityInput(BaseModel):
+    classification: Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "STRICTLY_CONFIDENTIAL"]
+    inherit_acl: bool
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+@router.put("/{resource_id}/security", dependencies=[Depends(require_csrf)])
+async def security_policy(
+    resource_id: uuid.UUID, payload: SecurityInput, request: Request, db: Db, user: Actor
+):
+    from datetime import UTC, datetime
+
+    from app.audit.writer import write_audit_event
+    from app.governance.policy import chain, governance_lock
+    from app.models.share import ExternalShare
+
+    await governance_lock(db)
+    await ACLAdministrationService(db, user, context(request)).require(resource_id)
+    if not payload.reason.strip():
+        raise ValueError("Reason required")
+    resource = await db.get(Resource, resource_id, populate_existing=True)
+    if resource is None:
+        raise HTTPException(404, "Resource unavailable")
+    old = {"classification": resource.classification, "inherit_acl": resource.inherit_acl}
+    changed = resource.classification != payload.classification
+    resource.classification, resource.inherit_acl = payload.classification, payload.inherit_acl
+    # A classification change never revives links issued under an older policy.
+    if changed:
+        shares = (
+            await db.scalars(
+                select(ExternalShare).where(ExternalShare.revoked_at.is_(None)).with_for_update()
+            )
+        ).all()
+        for share in shares:
+            if resource_id in {r.id for r in await chain(db, share.document_id)}:
+                share.revoked_at = datetime.now(UTC)
+                await write_audit_event(
+                    "share",
+                    user=str(user.id),
+                    resource=str(share.document_id),
+                    result="success",
+                    operation="revoke_classification_change",
+                    share_id=str(share.id),
+                    **context(request),
+                )
+    await write_audit_event(
+        "classification_changed" if changed else "change_acl",
+        user=str(user.id),
+        resource=str(resource.id),
+        result="success",
+        reason=payload.reason,
+        old_acl=old,
+        new_acl=payload.model_dump(exclude={"reason"}),
+        **context(request),
+    )
+    await db.commit()
+    return {
+        "data": {"classification": resource.classification, "inherit_acl": resource.inherit_acl}
+    }
+
+
+@router.get("/{resource_id}/capabilities")
+async def resource_capabilities(resource_id: uuid.UUID, db: Db, user: Actor):
+    from app.authorization.catalog import PERMISSIONS
+
+    await require(db, user, "VIEW", resource_id)
+    authorization = AuthorizationService()
+    allowed = []
+    for permission in sorted(PERMISSIONS):
+        if (await authorization.authorize(db, user, permission, resource_id)).allowed:
+            allowed.append(permission)
+    return {"data": allowed}

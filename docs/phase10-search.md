@@ -1,0 +1,21 @@
+# Phase 10 — ACL-filtered search
+
+`GET /api/v1/search?q=...&limit=20` requires an authenticated session; query length 2–200, limit 1–50. Returns `data` only: current DB id/name/type/department and plain-text snippet. Every hit passes AuthorizationService VIEW. Content matches/snippets also require PREVIEW; metadata-only permission cannot infer content through search. Results are never cached by the browser. There are no unrestricted totals, facets, scores, engine cursors or full indexed source in the response. UI renders snippets as escaped React text.
+
+OpenSearch provides at most 1,000 candidates, not authorization. Backend rejects nonexistent/foreign/stale versions, non-current or non-clean content, invalid resource/ancestor state, revoked ACL, disabled identities and hard policy. The search UI indicates no available results and suggests refining the query; results are bounded, not exhaustive for very broad queries. No user-supplied query DSL, regex, index name, URL or aggregation is forwarded.
+
+`python -m app.search.worker` processes a PostgreSQL durable checkpoint queue with document row locking / SKIP LOCKED. Only current CLEAN versions of ACTIVE documents are indexed. Immutable bytes are verified against DB size/SHA before extraction. Tika extracts DOCX/XLSX/PDF/TXT/CSV/JSON/XML; other approved formats have filename search. Both PDF OCR and general OCR are disabled. Extraction is bounded to 4 MiB by default, with a 60-second dependency timeout. A failing item retries after five minutes without starving other documents. Names/version/state changes trigger indexing; trash removes the index record. Ancestor/ACL changes take effect immediately through backend checks even if index contents have not changed. Parent-trash stale index records cannot grant access.
+
+OpenSearch or DB failure returns sanitized 503, never unfiltered candidates. Tika/index failure defers indexing; clean documents remain accessible according to ACL. Each returned document emits a view audit event with `operation=search` and request context, without logging the query.
+
+## Provisioning and rebuild
+
+Tika 3.3.2 maintenance server (Java 17) and OpenSearch 3.9.0 are private worker/backend services. Browser and user network must have no path to these ports. Production deployment must restrict Tika outbound connectivity and parser resource limits. Full profile wiring/TLS/firewall/container acceptance is Phase 21.
+
+Settings: `NAMBADRIVE_TIKA_URL`, `NAMBADRIVE_OPENSEARCH_URL`, `NAMBADRIVE_OPENSEARCH_USERNAME`, `NAMBADRIVE_OPENSEARCH_PASSWORD`, optional `NAMBADRIVE_OPENSEARCH_CA_FILE`, `NAMBADRIVE_SEARCH_INDEX`, `NAMBADRIVE_SEARCH_TEXT_MAX_BYTES`. HTTPS certificate validation is mandatory when HTTPS is configured; custom CA files are supported. There is no insecure-skip-verify option. Redirects and environment HTTP proxies are disabled. URLs are operator configuration, never request input. Use separate read-only backend and write-only worker accounts scoped to this index, supplied through each service's environment/secret mount; credentials are never returned or logged.
+
+With a temporary provisioning account, run `python -m app.search.manage initialize` to create the strict versioned mapping. Existing indexes are not silently replaced. After restoring/recreating a lost derived index, stop indexing workers, run `python -m app.search.manage rebuild`, then restart workers. This resets only checkpoints, preserving documents, versions, ACL and binaries. Index contents are rebuilt from verified storage. Query users must not have checkpoint/provisioning permissions.
+
+## Validation boundary
+
+Unit/API tests exercise filtering, no metadata/snippet leakage, current-version checks, inherited hard policy, disabled user/parent state, revoked permissions, JSON DSL injection, redirects, bounded extraction, retries and SHA failure. PostgreSQL migration roundtrip/schema drift and authorization coverage gate are required. Real Tika extraction and no-OCR smoke tests run locally. `scripts/test-search.sh` runs disposable Tika/OpenSearch and backend ACL filtering in CI. That script disables the OpenSearch security plugin only for its loopback, data-free engine contract test; it does not validate production TLS/account configuration. Production transport/security integration remains a Phase 21/22 gate.

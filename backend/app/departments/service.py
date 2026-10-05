@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.writer import write_audit_event
+from app.governance.policy import governance_lock
 from app.models.organization import Company, Department, DepartmentManager, DepartmentMembership
 from app.models.user import User
 
@@ -67,9 +68,15 @@ class OrganizationService:
         kind: str,
         valid_until: datetime | None = None,
     ) -> None:
+        await governance_lock(self.db)
         await self.department(department_id)
         # Serialize assignments for a user, including primary membership changes.
-        user = await self.db.scalar(select(User).where(User.id == user_id).with_for_update())
+        user = await self.db.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if user is None or not user.enabled:
             raise ValueError("User unavailable")
         now = datetime.now(UTC)

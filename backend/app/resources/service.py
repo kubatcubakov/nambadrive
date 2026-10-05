@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.writer import write_audit_event
 from app.departments.service import OrganizationService
+from app.governance.policy import governance_lock
 from app.models.resource import Resource
 from app.models.user import User
 
@@ -25,7 +26,7 @@ class ResourceService:
             if current in seen:
                 raise ValueError("Resource hierarchy cycle")
             seen.add(current)
-            row = await self.db.get(Resource, current)
+            row = await self.db.get(Resource, current, populate_existing=True)
             if row is None:
                 raise ValueError("Resource hierarchy incomplete")
             rows.append(row)
@@ -50,6 +51,7 @@ class ResourceService:
         inherit_acl: bool = True,
         classification: str = "INTERNAL",
     ) -> Resource:
+        await governance_lock(self.db)
         if resource_type not in {"SPACE", "FOLDER", "DOCUMENT"}:
             raise ValueError("Invalid resource type")
         if classification not in {"PUBLIC", "INTERNAL", "CONFIDENTIAL", "STRICTLY_CONFIDENTIAL"}:

@@ -10,6 +10,7 @@ from app.auth.dependencies import current_user, require_csrf
 from app.authorization.service import AuthorizationService
 from app.core.database import get_db
 from app.departments.service import OrganizationService
+from app.governance.policy import governance_lock
 from app.models.organization import Company, Department, DepartmentManager, DepartmentMembership
 from app.models.user import User
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/admin/organization", tags=["organization"])
 async def admin(
     db: Annotated[AsyncSession, Depends(get_db)], user: Annotated[User, Depends(current_user)]
 ) -> User:
+    await governance_lock(db)
     if not await AuthorizationService().organization_admin(db, user):
         raise HTTPException(403, "Organization administration required")
     return user

@@ -1,6 +1,6 @@
 # Development plan
 
-Current phase: **Phase 0 — Project Skeleton**
+Current checkpoint: **Phases 0–7 implemented**. See [PROGRESS.md](PROGRESS.md) for gates and remaining work.
 
 Next approved phases:
 

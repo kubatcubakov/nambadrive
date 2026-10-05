@@ -1,0 +1,48 @@
+# Operator must install a distinct mutually authenticated certificate on each node.
+# Names must match service certificate SANs; never use wildcard client authorization.
+[grpc]
+ca = "/tls/ca.crt"
+[grpc.master]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+allowed_commonNames = "nambadrive-master,nambadrive-volume,nambadrive-filer,nambadrive-s3"
+[grpc.volume]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+allowed_commonNames = "nambadrive-master,nambadrive-filer"
+[grpc.filer]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+allowed_commonNames = "nambadrive-s3,nambadrive-filer"
+[grpc.s3]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+allowed_commonNames = "nambadrive-s3"
+[grpc.client]
+cert = "/tls/client.crt"
+key = "/tls/client.key"
+[https.master]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+ca = "/tls/ca.crt"
+[https.volume]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+ca = "/tls/ca.crt"
+[https.filer]
+cert = "/tls/server.crt"
+key = "/tls/server.key"
+ca = "/tls/ca.crt"
+
+[https.client]
+enabled = true
+cert = "/tls/client.crt"
+key = "/tls/client.key"
+ca = "/tls/ca.crt"
+insecure_skip_verify = false
+[cors.allowed_origins]
+values = ""
+[access]
+ui = false
+[filer.expose_directory_metadata]
+enabled = false

@@ -22,10 +22,8 @@ oidc = OIDCClient(settings)
 
 
 def client_ip(request: Request) -> str | None:
-    # Reverse proxy is trusted in our deployment topology; first forwarded address is the browser.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",", maxsplit=1)[0].strip()
+    # Uvicorn's trusted proxy configuration supplies the verified client address.
+    # Never consume arbitrary user-supplied X-Forwarded-For here.
     return request.client.host if request.client else None
 
 
@@ -93,7 +91,6 @@ async def callback(
         ip=client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    await db.commit()
     await write_audit_event(
         "login",
         user_id=str(user.id),
@@ -103,6 +100,7 @@ async def callback(
         result="success",
     )
 
+    await db.commit()
     response = RedirectResponse(transaction.next_url, status_code=status.HTTP_302_FOUND)
     response.delete_cookie(settings.oidc_state_cookie_name, path="/api/v1/auth/callback")
     response.set_cookie(
