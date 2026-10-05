@@ -209,3 +209,42 @@ async def test_signed_oidc_requires_every_mandatory_claim(provider, claim):
     client, _, sign, _, _ = provider
     with pytest.raises(OIDCError):
         await client.validate_id_token(sign(omit=[claim]), "expected-nonce")
+
+
+@pytest.mark.parametrize("redirect", [False, True])
+async def test_token_exchange_sends_pkce_with_fixed_origin_and_never_follows_redirect(
+    provider, monkeypatch, redirect
+):
+    import ssl
+
+    import httpx
+
+    client, settings, sign, _, _ = provider
+    original = httpx.AsyncClient
+    calls = []
+
+    def transport(request):
+        calls.append(request)
+        assert str(request.url) == "https://id.example.test/token"
+        posted = parse_qs(request.content.decode())
+        assert posted["code_verifier"] == ["fixture-verifier"]
+        assert posted["redirect_uri"] == [settings.oidc_redirect_uri]
+        assert posted["grant_type"] == ["authorization_code"]
+        assert request.headers["Authorization"].startswith("Basic ")
+        if redirect:
+            return httpx.Response(302, headers={"Location": "https://attacker.example.test/token"})
+        return httpx.Response(200, json={"id_token": sign()})
+
+    def factory(**kwargs):
+        assert kwargs["trust_env"] is False and kwargs["follow_redirects"] is False
+        assert isinstance(kwargs["verify"], ssl.SSLContext)
+        return original(**kwargs, transport=httpx.MockTransport(transport))
+
+    monkeypatch.setattr("app.auth.oidc.httpx.AsyncClient", factory)
+    if redirect:
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.exchange_code("fixture-code", "fixture-verifier")
+    else:
+        token = (await client.exchange_code("fixture-code", "fixture-verifier"))["id_token"]
+        assert (await client.validate_id_token(token, "expected-nonce"))["sub"]
+    assert len(calls) == 1

@@ -22,7 +22,7 @@ sudo chown 10001:10001 "$runtime/audit"
 sudo chmod 750 "$runtime/audit"
 # ZAP writes reports using its UID; these contain no real accounts or cookies.
 sudo chown 1000:1000 acceptance-reports
-chmod 750 acceptance-reports
+sudo chmod 750 acceptance-reports
 docker network create --internal "$network" >/dev/null
 backend="$network-backend"
 containers+=("$backend")
