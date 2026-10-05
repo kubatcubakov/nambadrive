@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -53,6 +55,13 @@ class AuthorizationDecision:
 
 
 class AuthorizationService:
+    @staticmethod
+    def identity_integration(configured: str, supplied: str) -> bool:
+        # Compare fixed-length digests; a missing/weak configuration never enables provisioning.
+        return len(configured) >= 43 and hmac.compare_digest(
+            hashlib.sha256(configured.encode()).digest(), hashlib.sha256(supplied.encode()).digest()
+        )
+
     async def organization_admin(self, db: AsyncSession, user: User) -> bool:
         stored = await db.scalar(select(User).where(User.id == user.id, User.enabled.is_(True)))
         return stored is not None and await db.get(OrganizationAdministrator, user.id) is not None
@@ -122,6 +131,7 @@ class AuthorizationService:
                 "MANAGE_RETENTION",
                 "MANAGE_LEGAL_HOLD",
                 "MANAGE_QUOTAS",
+                "MANAGE_IDENTITY",
                 "RECEIVE_ADMIN_ALERTS",
             } and await self.system_admin(db, user, now):
                 return decision(True, "SYSTEM_ADMIN_CONFIGURATION")
@@ -136,6 +146,7 @@ class AuthorizationService:
             "MANAGE_RETENTION",
             "MANAGE_LEGAL_HOLD",
             "MANAGE_QUOTAS",
+            "MANAGE_IDENTITY",
             "RECEIVE_ADMIN_ALERTS",
         }:
             return decision(False, "INVALID_OPERATION")

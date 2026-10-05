@@ -35,6 +35,7 @@ SECRET_KEYS = frozenset(
         "code_verifier",
         "telegram_bot_token",
         "smtp_password",
+        "scim_token",
     }
 )
 

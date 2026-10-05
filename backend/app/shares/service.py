@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from app.audit.writer import write_audit_event
 from app.authorization.service import AuthorizationService
 from app.documents.service import DocumentService
+from app.governance.policy import governance_lock
 from app.models.resource import Resource
 from app.models.share import ExternalShare
 from app.models.user import User
@@ -34,6 +35,7 @@ class ShareService:
         allow_view: bool = True,
         allow_download: bool = False,
     ) -> tuple[ExternalShare, str]:
+        await governance_lock(self.db)
         if not 1 <= days <= 30 or (max_views is not None and max_views < 1):
             raise ValueError("Invalid share limits")
         if not (allow_view or allow_download) or (
@@ -93,6 +95,7 @@ class ShareService:
         )
 
     async def revoke(self, actor: User, document_id: uuid.UUID, share_id: uuid.UUID) -> None:
+        await governance_lock(self.db)
         # Ordinary SHARE is sufficient to revoke even after classification becomes non-public.
         await DocumentService(self.db, actor, self.context).require(document_id, "SHARE")
         share = await self.db.get(ExternalShare, share_id, with_for_update=True)
@@ -113,6 +116,7 @@ class ShareService:
     async def resolve(
         self, token: str, password: str | None, permission: str
     ) -> tuple[ExternalShare, User]:
+        await governance_lock(self.db)
         # Discover ID first, then use the same document -> share lock ordering as management.
         share = await self.db.scalar(
             select(ExternalShare).where(ExternalShare.token_hash == token_hash(token))

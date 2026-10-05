@@ -1,3 +1,4 @@
+import { IdentityAdmin } from './IdentityAdmin'
 import { AccessReviews } from './AccessReviews'
 import { Drive } from './Drive'
 import { Notifications } from './Notifications'
@@ -98,6 +99,7 @@ export function App() {
 
         {user ? (
           <div className="authBox">
+            <IdentityAdmin />
             <OrganizationAdmin />
             <ResourceAdmin />
             <Drive />

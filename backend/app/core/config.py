@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     )
     redis_url: str = "redis://redis:6379/0"
 
+    scim_token: SecretStr = SecretStr("")
+
     oidc_issuer: str = ""
     oidc_discovery_url: str = ""
     oidc_client_id: str = ""

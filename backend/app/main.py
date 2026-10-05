@@ -7,12 +7,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from app.api.scim import router as scim_router
 from app.api.v1.access_requests import router as access_requests_router
 from app.api.v1.access_reviews import router as access_reviews_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.health import router as health_router
+from app.api.v1.lifecycle import router as lifecycle_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.office import router as office_router
 from app.api.v1.organization import router as organization_router
@@ -46,6 +48,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(scim_router)
+app.include_router(lifecycle_router, prefix=settings.api_v1_prefix)
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 app.include_router(access_reviews_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router, prefix=settings.api_v1_prefix)
@@ -130,6 +134,17 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
             )
         except OSError as error:
             return await unavailable(request, error)
+    if request.url.path.startswith("/scim/v2/"):
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=exc.headers,
+            content={
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                "status": str(exc.status_code),
+                "detail": str(exc.detail),
+            },
+            media_type="application/scim+json",
+        )
     return JSONResponse(
         status_code=exc.status_code,
         headers=exc.headers,
@@ -145,6 +160,17 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    if request.url.path.startswith("/scim/v2/"):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                "status": "400",
+                "scimType": "invalidValue",
+                "detail": "Request validation failed",
+            },
+            media_type="application/scim+json",
+        )
     return JSONResponse(
         status_code=422,
         content={

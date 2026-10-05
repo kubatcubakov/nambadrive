@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import random_urlsafe, sha256_hex
 from app.core.config import Settings
+from app.governance.policy import governance_lock
 from app.models.session import ApplicationSession
 from app.models.user import User
 
@@ -19,6 +21,12 @@ async def create_session(
     ip: str | None,
     user_agent: str | None,
 ) -> str:
+    await governance_lock(db)
+    enabled = await db.scalar(
+        select(User.id).where(User.id == user.id, User.enabled.is_(True)).with_for_update()
+    )
+    if enabled is None:
+        raise HTTPException(403, "Account disabled")
     raw_token = random_urlsafe(48)
     now = datetime.now(UTC)
     session = ApplicationSession(
