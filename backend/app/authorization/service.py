@@ -4,11 +4,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.authorization.catalog import BREAK_GLASS_PERMISSIONS, DEFAULTS, PERMISSIONS, SENSITIVE
 from app.models.acl import ACLEntry, BreakGlassGrant, HardPolicy, Role, RoleBinding, RolePermission
+from app.models.document import DocumentVersion
 from app.models.organization import (
     Company,
     Department,
@@ -116,7 +117,11 @@ class AuthorizationService:
             )
             if global_policy is not None:
                 return decision(False, "HARD_POLICY")
-            if permission == "CREATE_SPACE" and await self.system_admin(db, user, now):
+            if permission in {
+                "CREATE_SPACE",
+                "MANAGE_RETENTION",
+                "MANAGE_LEGAL_HOLD",
+            } and await self.system_admin(db, user, now):
                 return decision(True, "SYSTEM_ADMIN_CONFIGURATION")
             return decision(False, "RESOURCE_INVALID")
         try:
@@ -124,10 +129,14 @@ class AuthorizationService:
         except ValueError:
             return decision(False, "RESOURCE_INVALID")
         resource = chain[0]
-        if permission == "CREATE_SPACE":
+        if permission in {"CREATE_SPACE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD"}:
             return decision(False, "INVALID_OPERATION")
         # Validate every ancestor; inheritance breaks only ordinary ACL/bindings.
         for row in chain:
+            if row.purge_started_at is not None:
+                return decision(False, "RESOURCE_PURGE_STARTED", row.id)
+            if row.purged_at is not None:
+                return decision(False, "RESOURCE_PURGED", row.id)
             if row.state != "ACTIVE" and not (
                 row is resource and row.state == "TRASH" and permission in {"PURGE", "RESTORE"}
             ):
@@ -164,6 +173,20 @@ class AuthorizationService:
                     return decision(False, "LEGAL_HOLD", row.id)
                 if row.retention_until and now < utc(row.retention_until):
                     return decision(False, "RETENTION", row.id)
+            from app.governance.policy import deadline
+
+            versions = (
+                await db.scalars(
+                    select(DocumentVersion).where(
+                        DocumentVersion.document_id == resource.id,
+                        DocumentVersion.purged_at.is_(None),
+                    )
+                )
+            ).all()
+            for version in versions:
+                expiry = await deadline(db, version, chain)
+                if expiry is not None and now < expiry:
+                    return decision(False, "RETENTION", resource.id)
             if resource.deleted_at is None or now < utc(resource.deleted_at) + timedelta(days=30):
                 return decision(False, "TRASH_PERIOD")
         grants = (
@@ -343,3 +366,85 @@ class AuthorizationService:
         if result.allowed and result.reason in {"OWNER", "DEPARTMENT_MANAGER"}:
             return result
         return AuthorizationDecision("DENY", "CHANGE_ACL", "OWNER_OR_MANAGER_REQUIRED", resource_id)
+
+    async def authorize_cleanup(
+        self,
+        db: AsyncSession,
+        version: DocumentVersion,
+        *,
+        quarantine_only: bool = False,
+        now: datetime | None = None,
+    ) -> AuthorizationDecision:
+        """Trusted worker policy entry point. Never exposed as a user permission bypass."""
+        from app.governance.policy import chain, deadline
+        from app.models.office import OfficeRoom
+
+        now = now or datetime.now(UTC)
+
+        def result(allow: bool, reason: str) -> AuthorizationDecision:
+            return AuthorizationDecision(
+                "ALLOW" if allow else "DENY", "PURGE", reason, version.document_id
+            )
+
+        if version.purged_at is not None:
+            return result(False, "VERSION_PURGED")
+        try:
+            ancestors = await chain(db, version.document_id)
+        except ValueError:
+            return result(False, "RESOURCE_INVALID")
+        ids = [row.id for row in ancestors]
+        policies = (
+            await db.scalars(select(HardPolicy).where(HardPolicy.permission_id == "PURGE"))
+        ).all()
+        if any(policy.resource_id is None or policy.resource_id in ids for policy in policies):
+            return result(False, "HARD_POLICY")
+        if any(row.legal_hold for row in ancestors):
+            return result(False, "LEGAL_HOLD")
+        expiry = await deadline(db, version, ancestors)
+        if expiry is not None and now < expiry:
+            return result(False, "RETENTION")
+        document = ancestors[0]
+        if document.resource_type != "DOCUMENT" or document.purged_at is not None:
+            return result(False, "RESOURCE_INVALID")
+        if quarantine_only:
+            if (
+                version.quarantine_purged_at is not None
+                or version.status != "CLEAN"
+                or version.scanned_at is None
+            ):
+                return result(False, "QUARANTINE_NOT_ELIGIBLE")
+            return result(now >= utc(version.scanned_at) + timedelta(days=30), "QUARANTINE_PERIOD")
+        pin = await db.scalar(
+            select(OfficeRoom)
+            .where(
+                OfficeRoom.base_version_id == version.id,
+                OfficeRoom.closed_at.is_(None),
+                OfficeRoom.expires_at > now,
+            )
+            .limit(1)
+        )
+        if pin is not None:
+            return result(False, "EDITOR_VERSION_PIN")
+        if document.state == "TRASH" and document.deleted_at is not None:
+            return result(now >= utc(document.deleted_at) + timedelta(days=30), "TRASH_PERIOD")
+        if version.status in {"INFECTED", "REJECTED"}:
+            return result(
+                now >= utc(version.scanned_at or version.created_at) + timedelta(days=30),
+                "QUARANTINE_PERIOD",
+            )
+        if version.status == "CLEAN" and not version.is_current and version.prune_after is not None:
+            newer = await db.scalar(
+                select(func.count())
+                .select_from(DocumentVersion)
+                .where(
+                    DocumentVersion.document_id == version.document_id,
+                    DocumentVersion.status == "CLEAN",
+                    DocumentVersion.purged_at.is_(None),
+                    DocumentVersion.purge_started_at.is_(None),
+                    DocumentVersion.sequence_no > version.sequence_no,
+                )
+            )
+            return result(
+                (newer or 0) >= 3 and now >= utc(version.prune_after), "VERSION_TRASH_PERIOD"
+            )
+        return result(False, "CLEANUP_NOT_ELIGIBLE")

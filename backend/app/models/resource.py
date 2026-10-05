@@ -46,3 +46,5 @@ class Resource(Base):
     # Policy metadata for the mandatory Phase 4 pre-grant checks; no policy mutation API yet.
     legal_hold: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

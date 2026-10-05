@@ -14,6 +14,7 @@ from starlette.concurrency import run_in_threadpool
 from app.audit.writer import write_audit_event
 from app.authorization.service import AuthorizationService, utc
 from app.documents.validation import filename
+from app.governance.policy import bind_retention
 from app.models.acl import HardPolicy
 from app.models.document import DocumentVersion
 from app.models.metadata import DocumentMetadata
@@ -198,6 +199,7 @@ class DocumentService:
                 status="CLEAN",
                 is_current=True,
                 scanned_at=version.scanned_at,
+                retention_until=version.retention_until,
             )
         )
         metadata = await self.db.get(DocumentMetadata, source.id)
@@ -212,6 +214,8 @@ class DocumentService:
                     },
                 )
             )
+        await self.db.flush()
+        await bind_retention(self.db, await self.current(row.id))
         await self.audit("copy", row, source_document=str(source.id))
         await self.db.commit()
         return row

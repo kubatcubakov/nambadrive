@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import tempfile
 import uuid
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.authorization.service import utc
 from app.documents.service import DocumentService, read_verified
+from app.governance.policy import bind_retention, schedule_pruning
 from app.models.document import DocumentVersion
 from app.models.resource import Resource
 from app.models.user import User
@@ -37,7 +36,10 @@ async def promote(
             await db.scalars(
                 select(DocumentVersion)
                 .where(
-                    DocumentVersion.document_id == document.id, DocumentVersion.status == "CLEAN"
+                    DocumentVersion.document_id == document.id,
+                    DocumentVersion.status == "CLEAN",
+                    DocumentVersion.purged_at.is_(None),
+                    DocumentVersion.purge_started_at.is_(None),
                 )
                 .order_by(DocumentVersion.sequence_no.desc())
             )
@@ -52,16 +54,7 @@ async def promote(
             item.is_current = False
     await db.flush()
     newest.is_current = True
-    chain = await ResourceService(db, actor, {}).ancestors(document.id)
-    protected = any(
-        row.legal_hold or (row.retention_until and utc(row.retention_until) > datetime.now(UTC))
-        for row in chain
-    )
-    for index, item in enumerate(versions):
-        if index < 3 or protected:
-            item.prune_after = None
-        elif item.prune_after is None:
-            item.prune_after = datetime.now(UTC) + timedelta(days=30)
+    await schedule_pruning(db, document.id)
     await db.flush()
 
 
@@ -79,6 +72,8 @@ class VersionService:
                     .where(
                         DocumentVersion.document_id == document_id,
                         DocumentVersion.status == "CLEAN",
+                        DocumentVersion.purged_at.is_(None),
+                        DocumentVersion.purge_started_at.is_(None),
                         DocumentVersion.prune_after.is_(None),
                     )
                     .order_by(DocumentVersion.sequence_no.desc())
@@ -96,6 +91,8 @@ class VersionService:
             or source.document_id != document.id
             or source.status != "CLEAN"
             or source.prune_after is not None
+            or source.purged_at is not None
+            or source.purge_started_at is not None
         ):
             raise ValueError("Version unavailable")
         chain = await ResourceService(self.db, self.actor, self.context).ancestors(document_id)
@@ -112,6 +109,7 @@ class VersionService:
             scanned_at=source.scanned_at,
             sequence_no=await next_sequence(self.db, document.id),
             is_current=False,
+            retention_until=source.retention_until,
         )
         with tempfile.TemporaryFile() as content:
             await run_in_threadpool(read_verified, storage, source, content)
@@ -123,6 +121,7 @@ class VersionService:
             )
         self.db.add(version)
         await self.db.flush()
+        await bind_retention(self.db, version)
         await promote(self.db, self.actor, document, version)
         await self.documents.audit(
             "edit",

@@ -59,3 +59,8 @@ class DocumentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quarantine_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

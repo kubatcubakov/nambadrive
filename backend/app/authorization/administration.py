@@ -55,7 +55,8 @@ class ACLAdministrationService:
         now = datetime.now(UTC)
         valid_from = valid_from or now
         if (
-            permission not in PERMISSIONS - {"CREATE_SPACE", "PURGE"}
+            permission
+            not in PERMISSIONS - {"CREATE_SPACE", "PURGE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD"}
             or effect not in {"ALLOW", "DENY"}
             or not reason.strip()
             or not (applies_to_self or propagate_to_children)

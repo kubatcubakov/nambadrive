@@ -17,6 +17,7 @@ from app.documents.antivirus import ClamAV, ScanUnavailable
 from app.documents.service import DocumentService
 from app.documents.validation import filename, validate
 from app.documents.versions import next_sequence, promote
+from app.governance.policy import bind_retention
 from app.models.document import DocumentVersion
 from app.models.resource import Resource
 from app.models.user import User
@@ -73,6 +74,7 @@ class UploadService:
         )
         self.db.add(version)
         await self.db.flush()
+        await bind_retention(self.db, version)
         await write_audit_event(
             "upload",
             user=str(actor.id),
@@ -121,6 +123,7 @@ class UploadService:
         )
         self.db.add(version)
         await self.db.flush()
+        await bind_retention(self.db, version)
         await write_audit_event(
             "upload",
             user=str(actor.id),
