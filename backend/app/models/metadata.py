@@ -12,7 +12,7 @@ from app.models.base import Base
 class DocumentMetadata(Base):
     __tablename__ = "document_metadata"
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("resources.id"), primary_key=True)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id"), index=True)
     counterparty: Mapped[str | None] = mapped_column(String(255))
     contract_number: Mapped[str | None] = mapped_column(String(255))
     contract_date: Mapped[date | None] = mapped_column(Date)

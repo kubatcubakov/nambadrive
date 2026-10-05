@@ -14,13 +14,14 @@ from starlette.concurrency import run_in_threadpool
 from app.audit.writer import write_audit_event
 from app.authorization.service import AuthorizationService, utc
 from app.documents.validation import filename
-from app.governance.policy import bind_retention
+from app.governance.policy import bind_retention, governance_lock
 from app.models.acl import HardPolicy
 from app.models.document import DocumentVersion
 from app.models.metadata import DocumentMetadata
 from app.models.organization import Department
 from app.models.resource import Resource
 from app.models.user import User
+from app.quotas.service import QuotaService
 from app.resources.service import ResourceService
 from app.storage.seaweed import Area, ObjectKey, SeaweedStorage, StorageError
 
@@ -68,6 +69,7 @@ class DocumentService:
         )
 
     async def rename(self, document_id: uuid.UUID, name: str) -> Resource:
+        await governance_lock(self.db)
         row = await self.require(document_id, "RENAME")
         name = filename(name)
         if name.rsplit(".", 1)[-1].lower() != row.name.rsplit(".", 1)[-1].lower():
@@ -79,12 +81,14 @@ class DocumentService:
         return row
 
     async def trash(self, document_id: uuid.UUID) -> None:
+        await governance_lock(self.db)
         row = await self.require(document_id, "DELETE")
         row.state, row.deleted_at = "TRASH", datetime.now(UTC)
         await self.audit("delete", row)
         await self.db.commit()
 
     async def restore(self, document_id: uuid.UUID) -> Resource:
+        await governance_lock(self.db)
         row = await self.require(document_id, "RESTORE")
         if row.state != "TRASH":
             raise ValueError("Document is not in trash")
@@ -150,6 +154,7 @@ class DocumentService:
                 existing.add(policy.permission_id)
 
     async def move(self, document_id: uuid.UUID, target_id: uuid.UUID) -> Resource:
+        await governance_lock(self.db)
         row = await self.require(document_id, "MOVE")
         destination = await self.destination(row, target_id)
         old_parent = row.parent_id
@@ -157,6 +162,7 @@ class DocumentService:
         row.parent_id = target_id
         row.department_id = destination[0].department_id
         await self.db.flush()
+        await QuotaService(self.db, self.actor, self.context).check(row, 0, {"DEPARTMENT"})
         await self.audit("move", row, old_parent=str(old_parent), new_parent=str(target_id))
         await self.db.commit()
         return row
@@ -164,6 +170,7 @@ class DocumentService:
     async def copy(
         self, document_id: uuid.UUID, target_id: uuid.UUID, storage: SeaweedStorage
     ) -> Resource:
+        await governance_lock(self.db)
         source = await self.require(document_id, "COPY")
         destination = await self.destination(source, target_id)
         version = await self.current(source.id)
@@ -180,12 +187,27 @@ class DocumentService:
         self.db.add(row)
         await self.db.flush()
         await self.preserve_policy(source, row, destination)
+        metadata = await self.db.get(DocumentMetadata, source.id)
+        if metadata:
+            self.db.add(
+                DocumentMetadata(
+                    document_id=row.id,
+                    **{
+                        c.name: getattr(metadata, c.name)
+                        for c in metadata.__table__.columns
+                        if c.name != "document_id"
+                    },
+                )
+            )
+        await self.db.flush()
         new_id = uuid.uuid4()
         with tempfile.TemporaryFile() as content:
             await run_in_threadpool(read_verified, storage, version, content)
-            info = await run_in_threadpool(
-                storage.put, ObjectKey(destination[-1].id, row.id, new_id), content, Area.DATA
+            key = ObjectKey(destination[-1].id, row.id, new_id)
+            await QuotaService(self.db, self.actor, self.context).reserve(
+                row, key, content, Area.DATA, source.id
             )
+            info = await run_in_threadpool(storage.put, key, content, Area.DATA)
         self.db.add(
             DocumentVersion(
                 id=new_id,
@@ -202,20 +224,9 @@ class DocumentService:
                 retention_until=version.retention_until,
             )
         )
-        metadata = await self.db.get(DocumentMetadata, source.id)
-        if metadata:
-            self.db.add(
-                DocumentMetadata(
-                    document_id=row.id,
-                    **{
-                        c.name: getattr(metadata, c.name)
-                        for c in metadata.__table__.columns
-                        if c.name != "document_id"
-                    },
-                )
-            )
         await self.db.flush()
         await bind_retention(self.db, await self.current(row.id))
+        await QuotaService(self.db, self.actor, self.context).complete(new_id)
         await self.audit("copy", row, source_document=str(source.id))
         await self.db.commit()
         return row

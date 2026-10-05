@@ -121,6 +121,7 @@ class AuthorizationService:
                 "CREATE_SPACE",
                 "MANAGE_RETENTION",
                 "MANAGE_LEGAL_HOLD",
+                "MANAGE_QUOTAS",
             } and await self.system_admin(db, user, now):
                 return decision(True, "SYSTEM_ADMIN_CONFIGURATION")
             return decision(False, "RESOURCE_INVALID")
@@ -129,7 +130,7 @@ class AuthorizationService:
         except ValueError:
             return decision(False, "RESOURCE_INVALID")
         resource = chain[0]
-        if permission in {"CREATE_SPACE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD"}:
+        if permission in {"CREATE_SPACE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD", "MANAGE_QUOTAS"}:
             return decision(False, "INVALID_OPERATION")
         # Validate every ancestor; inheritance breaks only ordinary ACL/bindings.
         for row in chain:
@@ -448,3 +449,7 @@ class AuthorizationService:
                 (newer or 0) >= 3 and now >= utc(version.prune_after), "VERSION_TRASH_PERIOD"
             )
         return result(False, "CLEANUP_NOT_ELIGIBLE")
+
+    async def account_self(self, db: AsyncSession, user: User, subject_id: uuid.UUID) -> bool:
+        stored = await db.scalar(select(User.id).where(User.id == user.id, User.enabled.is_(True)))
+        return user.enabled and stored is not None and subject_id == user.id

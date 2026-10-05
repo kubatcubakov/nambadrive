@@ -25,6 +25,7 @@ from app.models.organization import (  # noqa: F401
     DepartmentMembership,
     OrganizationAdministrator,
 )
+from app.models.quota import Project, QuotaIncident, QuotaLimit, StorageReservation  # noqa: F401
 from app.models.resource import Resource  # noqa: F401
 from app.models.search import SearchCheckpoint  # noqa: F401
 from app.models.share import ExternalShare  # noqa: F401

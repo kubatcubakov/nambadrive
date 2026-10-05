@@ -14,6 +14,7 @@ from app.api.v1.governance import router as governance_router
 from app.api.v1.health import router as health_router
 from app.api.v1.office import router as office_router
 from app.api.v1.organization import router as organization_router
+from app.api.v1.quotas import router as quotas_router
 from app.api.v1.resources import router as resources_router
 from app.api.v1.search import router as search_router
 from app.api.v1.shares import router as shares_router
@@ -83,6 +84,7 @@ async def conflict(request: Request, exc: IntegrityError) -> JSONResponse:
 
 
 app.include_router(resources_router, prefix=settings.api_v1_prefix)
+app.include_router(quotas_router, prefix=settings.api_v1_prefix)
 
 
 @app.middleware("http")

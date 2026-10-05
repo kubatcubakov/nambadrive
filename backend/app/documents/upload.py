@@ -17,10 +17,11 @@ from app.documents.antivirus import ClamAV, ScanUnavailable
 from app.documents.service import DocumentService
 from app.documents.validation import filename, validate
 from app.documents.versions import next_sequence, promote
-from app.governance.policy import bind_retention
+from app.governance.policy import bind_retention, governance_lock
 from app.models.document import DocumentVersion
 from app.models.resource import Resource
 from app.models.user import User
+from app.quotas.service import QuotaService
 from app.resources.service import ResourceService
 from app.storage.seaweed import Area, ObjectExists, ObjectKey, SeaweedStorage, StorageError
 
@@ -37,6 +38,7 @@ class UploadService:
         source: BinaryIO,
         context: dict[str, Any],
     ) -> DocumentVersion:
+        await governance_lock(self.db)
         parent = await self.db.get(Resource, parent_id, with_for_update=True)
         decision = await AuthorizationService().authorize(self.db, actor, "CREATE", parent_id)
         if not decision.allowed:
@@ -60,6 +62,7 @@ class UploadService:
         await self.db.flush()
         version_id = uuid.uuid4()
         key = ObjectKey(chain[-1].id, document.id, version_id)
+        await QuotaService(self.db, actor, context).reserve(document, key, source, Area.QUARANTINE)
         info = await run_in_threadpool(self.storage.put, key, source)
         version = DocumentVersion(
             id=version_id,
@@ -75,6 +78,7 @@ class UploadService:
         self.db.add(version)
         await self.db.flush()
         await bind_retention(self.db, version)
+        await QuotaService(self.db, actor, context).complete(version.id)
         await write_audit_event(
             "upload",
             user=str(actor.id),
@@ -97,6 +101,7 @@ class UploadService:
         commit: bool = True,
         office: bool = False,
     ) -> DocumentVersion:
+        await governance_lock(self.db)
         permission = "EDIT" if office else "UPLOAD_NEW_VERSION"
         document = await DocumentService(self.db, actor, context).require(document_id, permission)
         name = filename(name)
@@ -105,9 +110,9 @@ class UploadService:
         mime = await run_in_threadpool(validate, source, name, self.storage.max_bytes)
         chain = await ResourceService(self.db, actor, context).ancestors(document.id)
         version_id = uuid.uuid4()
-        info = await run_in_threadpool(
-            self.storage.put, ObjectKey(chain[-1].id, document.id, version_id), source
-        )
+        key = ObjectKey(chain[-1].id, document.id, version_id)
+        await QuotaService(self.db, actor, context).reserve(document, key, source, Area.QUARANTINE)
+        info = await run_in_threadpool(self.storage.put, key, source)
         version = DocumentVersion(
             id=version_id,
             document_id=document.id,
@@ -124,6 +129,7 @@ class UploadService:
         self.db.add(version)
         await self.db.flush()
         await bind_retention(self.db, version)
+        await QuotaService(self.db, actor, context).complete(version.id)
         await write_audit_event(
             "upload",
             user=str(actor.id),
@@ -138,6 +144,7 @@ class UploadService:
 
     async def scan_one(self, scanner: ClamAV) -> bool:
         """Durable DB queue; locks prevent concurrent promotion. Retry after any outage."""
+        await governance_lock(self.db)
         version = await self.db.scalar(
             select(DocumentVersion)
             .where(

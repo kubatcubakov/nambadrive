@@ -15,9 +15,10 @@ Implementation checkpoint: 2026-10-05. Working branch `codex/phases-5-22`, draft
 | 10 | Tika/OpenSearch indexing/search with fresh ACL; real engines and CI green |
 | 11 | Internal/external shares, hashed tokens, passwords/rate limits/atomic usage; PostgreSQL and real Redis CI green |
 | 12 | Owner/manager access requests, minimal discovery, temporary ACL; local/PostgreSQL/CI green |
-| 13 | Retention policies, historical Legal Hold, governed internal cleanup; implemented, phase gates required before Phase 14 |
-| 14–22 | Pending |
+| 13 | Retention policies, historical Legal Hold, governed internal cleanup; local/PostgreSQL/CI green |
+| 14 | User/department/project quotas, durable allocation journal; implementation and local/PostgreSQL gates, CI required before Phase 15 |
+| 15–22 | Pending |
 
 Phase 13 validation: 443 local tests passed (12 opt-in runtime skips); 424 PostgreSQL regression tests passed, including immutable retention and hold/cleanup serialization. Authorization coverage remains above 90%. Migration upgrade/check/downgrade/upgrade, Ruff/mypy/Bandit/secret/dependency checks and frontend typecheck/lint/build pass. Per-phase documentation records exact APIs and validation boundaries.
 
-Release work still required: quotas, notification delivery, complete audit/Wazuh, quarterly access review, disabled-user lifecycle, complete dashboard/Drive UI, backup/restore, deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.
+Release work still required: notification delivery, complete audit/Wazuh, quarterly access review, disabled-user lifecycle, complete dashboard/Drive UI, backup/restore, deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.

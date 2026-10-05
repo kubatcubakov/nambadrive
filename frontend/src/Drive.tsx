@@ -7,7 +7,7 @@ import { Upload } from './Upload'
 import { Search } from './Search'
 
 type Item = { id: string; name: string; resource_type: string; department_id: string }
-type Detail = Item & { size: number; mime_type: string; owner_user_id: string; sha256: string; metadata: { description?: string; tags?: string[] } }
+type Detail = Item & { size: number; mime_type: string; owner_user_id: string; sha256: string; metadata: { description?: string; tags?: string[]; project_id?: string | null } }
 async function api(path: string, method = 'GET', body?: object) {
   const headers: Record<string,string> = { 'Content-Type':'application/json' }
   if (method !== 'GET') {
@@ -34,6 +34,8 @@ export function Drive() {
   const [rename, setRename] = useState('')
   const [description, setDescription] = useState('')
   const [tags, setTags] = useState('')
+  const [project, setProject] = useState('')
+  const [projects, setProjects] = useState<{id:string;name:string}[]>([])
   const [destination, setDestination] = useState<Item[]>([])
   const [targets, setTargets] = useState<Item[]>([])
   const [transfer, setTransfer] = useState<'move'|'copy'|null>(null)
@@ -60,6 +62,8 @@ export function Drive() {
       return decision.decision === 'ALLOW' ? p : ''
     }))
     setSelected(detail); setPermissions(allowed); setRename(detail.name)
+    setProject(detail.metadata.project_id ?? '')
+    setProjects(allowed.includes('EDIT') ? await api('/quotas/projects-for/'+id) as {id:string;name:string}[] : [])
     setDescription(detail.metadata.description ?? ''); setTags((detail.metadata.tags ?? []).join(', '))
   }, [])
   useEffect(()=>{
@@ -101,7 +105,7 @@ export function Drive() {
       {permissions.includes('DOWNLOAD') && <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>}
       {preview && <img className="document-preview" src={`/api/v1/documents/${selected.id}/preview`} alt="Предпросмотр документа" onError={() => setStatus('Предпросмотр для этого файла недоступен')} />}
       {permissions.includes('RENAME') && <form onSubmit={e => {e.preventDefault(); void run(async () => {await api(`/documents/${selected.id}/rename`,'POST',{name:rename}); await reload();setSelected({...selected,name:rename})})}}><label>Имя <input value={rename} onChange={e=>setRename(e.target.value)} /></label><button>Переименовать</button></form>}
-      {permissions.includes('EDIT') && <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api(`/documents/${selected.id}/metadata`,'PUT',{...selected.metadata,description,tags:tags.split(',').map(t=>t.trim()).filter(Boolean)});setStatus('Описание сохранено')})}}><label>Описание <textarea value={description} onChange={e=>setDescription(e.target.value)} /></label><label>Теги через запятую <input value={tags} onChange={e=>setTags(e.target.value)} /></label><button>Сохранить</button></form>}
+      {permissions.includes('EDIT') && <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api(`/documents/${selected.id}/metadata`,'PUT',{...selected.metadata,project_id:project||null,description,tags:tags.split(',').map(t=>t.trim()).filter(Boolean)});setStatus('Описание сохранено')})}}><label>Проект <select value={project} onChange={e=>setProject(e.target.value)}><option value="">Без проекта</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Описание <textarea value={description} onChange={e=>setDescription(e.target.value)} /></label><label>Теги через запятую <input value={tags} onChange={e=>setTags(e.target.value)} /></label><button>Сохранить</button></form>}
       {(['move','copy'] as const).map(action=>permissions.includes(action.toUpperCase()) && <button key={action} onClick={()=>void run(async()=>{setTransfer(action);await browseDestination([])})}>{action==='move'?'Переместить':'Копировать'}</button>)}
       {permissions.includes('UPLOAD_NEW_VERSION') && <Upload documentId={selected.id} />}
       {permissions.includes('VIEW_VERSION_HISTORY') && <Versions key={selected.id} documentId={selected.id} canRestore={permissions.includes('RESTORE_VERSION')} />}

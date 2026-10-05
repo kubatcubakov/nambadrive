@@ -56,7 +56,8 @@ class ACLAdministrationService:
         valid_from = valid_from or now
         if (
             permission
-            not in PERMISSIONS - {"CREATE_SPACE", "PURGE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD"}
+            not in PERMISSIONS
+            - {"CREATE_SPACE", "PURGE", "MANAGE_RETENTION", "MANAGE_LEGAL_HOLD", "MANAGE_QUOTAS"}
             or effect not in {"ALLOW", "DENY"}
             or not reason.strip()
             or not (applies_to_self or propagate_to_children)

@@ -118,16 +118,26 @@ async def update_metadata(
     document_id: uuid.UUID, payload: MetadataInput, request: Request, db: Db, user: Actor
 ) -> dict[str, object]:
     from app.documents.service import DocumentService
+    from app.governance.policy import governance_lock
     from app.models.metadata import DocumentMetadata
+    from app.quotas.service import QuotaService
 
+    await governance_lock(db)
     service = DocumentService(db, user, context(request))
     row = await service.require(document_id, "EDIT")
+    quota = QuotaService(db, user, context(request))
     metadata = await db.get(DocumentMetadata, document_id)
+    old_project_id = metadata.project_id if metadata else None
+    if payload.project_id != old_project_id:
+        await quota.validate_project(row, payload.project_id)
     if metadata is None:
         metadata = DocumentMetadata(document_id=document_id)
         db.add(metadata)
     for key, value in payload.model_dump().items():
         setattr(metadata, key, value)
+    await db.flush()
+    if payload.project_id != old_project_id:
+        await quota.check(row, 0, {"PROJECT"})
     await service.audit("edit", row, operation="metadata")
     await db.commit()
     return {"data": payload.model_dump()}
@@ -160,7 +170,7 @@ async def copy_document(
     from app.documents.service import DocumentService
 
     service = DocumentService(db, user, context(request))
-    await service.require(document_id, "COPY")
+    await require(db, user, "COPY", document_id)
     row = await service.copy(document_id, payload.parent_id, create_storage(get_settings()))
     return {"data": {"id": row.id}}
 

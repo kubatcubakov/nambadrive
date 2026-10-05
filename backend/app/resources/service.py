@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.writer import write_audit_event
 from app.departments.service import OrganizationService
+from app.governance.policy import governance_lock
 from app.models.resource import Resource
 from app.models.user import User
 
@@ -50,6 +51,7 @@ class ResourceService:
         inherit_acl: bool = True,
         classification: str = "INTERNAL",
     ) -> Resource:
+        await governance_lock(self.db)
         if resource_type not in {"SPACE", "FOLDER", "DOCUMENT"}:
             raise ValueError("Invalid resource type")
         if classification not in {"PUBLIC", "INTERNAL", "CONFIDENTIAL", "STRICTLY_CONFIDENTIAL"}:

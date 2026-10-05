@@ -9,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.documents.service import DocumentService, read_verified
-from app.governance.policy import bind_retention, schedule_pruning
+from app.governance.policy import bind_retention, governance_lock, schedule_pruning
 from app.models.document import DocumentVersion
 from app.models.resource import Resource
 from app.models.user import User
+from app.quotas.service import QuotaService
 from app.resources.service import ResourceService
 from app.storage.seaweed import Area, ObjectKey, SeaweedStorage
 
@@ -84,6 +85,7 @@ class VersionService:
     async def restore(
         self, document_id: uuid.UUID, version_id: uuid.UUID, storage: SeaweedStorage
     ) -> DocumentVersion:
+        await governance_lock(self.db)
         document = await self.documents.require(document_id, "RESTORE_VERSION")
         source = await self.db.get(DocumentVersion, version_id)
         if (
@@ -113,6 +115,12 @@ class VersionService:
         )
         with tempfile.TemporaryFile() as content:
             await run_in_threadpool(read_verified, storage, source, content)
+            await QuotaService(self.db, self.actor, self.context).reserve(
+                document,
+                ObjectKey(version.space_id, document.id, version.id),
+                content,
+                Area.DATA,
+            )
             await run_in_threadpool(
                 storage.put,
                 ObjectKey(version.space_id, document.id, version.id),
@@ -122,6 +130,7 @@ class VersionService:
         self.db.add(version)
         await self.db.flush()
         await bind_retention(self.db, version)
+        await QuotaService(self.db, self.actor, self.context).complete(version.id)
         await promote(self.db, self.actor, document, version)
         await self.documents.audit(
             "edit",

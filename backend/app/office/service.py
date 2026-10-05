@@ -18,6 +18,7 @@ from app.authorization.service import AuthorizationService, utc
 from app.core.config import Settings
 from app.documents.service import DocumentService
 from app.documents.upload import UploadService
+from app.governance.policy import governance_lock
 from app.models.document import DocumentVersion
 from app.models.office import OfficeRoom, OfficeSave, OfficeSession
 from app.models.session import ApplicationSession
@@ -200,6 +201,7 @@ class OfficeService:
     async def callback(
         self, session_id: uuid.UUID, payload: dict[str, Any], storage: SeaweedStorage
     ) -> dict[str, int]:
+        await governance_lock(self.db)
         # A durable receipt is acknowledged after signature and current actor authorization.
         existing_session = await self.db.get(OfficeSession, session_id)
         if existing_session is None:
