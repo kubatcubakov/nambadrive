@@ -21,8 +21,9 @@ Implementation checkpoint: 2026-10-05. Working branch `codex/phases-5-22`, draft
 | 16 | Contextual durable audit and Wazuh integration; local/PostgreSQL/real Wazuh CI green |
 | 17 | Quarterly owner/manager reviews, snapshots and audited revoke decisions; all seven CI jobs green |
 | 18 | Private SCIM provisioning, disabled-user revocation and audited ownership transfer/queue; all seven CI jobs green |
-| 19 | Responsive Drive navigation, private favorites/recent, visible-only pagination and admin dashboard; local/PostgreSQL/Chromium gates green, CI required before Phase 20 |
-| 20–22 | Pending |
+| 19 | Responsive Drive navigation, private favorites/recent, visible-only pagination and admin dashboard; all seven CI jobs green, including Chromium |
+| 20 | Encrypted independent cold bundles, durable WAL hook and isolated real PostgreSQL/SeaweedFS restore; local gates green, eight CI jobs required before Phase 21 |
+| 21–22 | Pending |
 
 Phase 13 validation: 443 local tests passed (12 opt-in runtime skips); 424 PostgreSQL regression tests passed, including immutable retention and hold/cleanup serialization. Authorization coverage remains above 90%. Migration upgrade/check/downgrade/upgrade, Ruff/mypy/Bandit/secret/dependency checks and frontend typecheck/lint/build pass. Per-phase documentation records exact APIs and validation boundaries.
 
@@ -30,4 +31,6 @@ Phase 18 validation: 534 local tests passed (17 opt-in runtime skips), 520 Postg
 
 Phase 19 validation: 542 local / 528 PostgreSQL tests passed; authorization coverage 95.88% / 95.35%. Migration roundtrip and all lint/security/dependency/frontend gates green; three Chromium desktop/mobile UI smoke tests passed with simulated API fixtures. See docs/phase19-drive-dashboard.md.
 
-Release work still required: backup/restore, deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.
+Phase 20 validation: 551 local regression tests plus ten backup unit cases passed; 528 PostgreSQL regressions, migration roundtrip, Chromium and security/dependency gates green. Authorization coverage 95.88% local / 94.48% PostgreSQL. Real PG17.11/Seaweed4.48 recovery proved archived WAL replay beyond basebackup, object SHA-256 and preserved Legal Hold/quarantine/default-deny. Tiny fixture restore took 24.333 seconds; representative 500 GB RPO/RTO acceptance remains pending. See docs/phase20-backup-restore.md.
+
+Release work still required: deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.
