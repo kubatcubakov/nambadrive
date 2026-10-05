@@ -5,6 +5,7 @@ import { OfficeEditor } from "./OfficeEditor";
 import { Versions } from "./Versions";
 import { Upload } from "./Upload";
 import { Search } from "./Search";
+import { FileIcon } from "./Icons";
 import { ResourceAdmin } from "./ResourceAdmin";
 
 type Item = {
@@ -32,6 +33,13 @@ type Detail = Item & {
     contract_expiry?: string | null;
   };
 };
+function formatSize(size: number | null | undefined) {
+  if (size == null) return "—";
+  if (size < 1024) return `${size} байт`;
+  const megabytes = size >= 1024 * 1024;
+  return `${new Intl.NumberFormat("ru", {maximumFractionDigits:1}).format(size / (megabytes ? 1024*1024 : 1024))} ${megabytes ? "МБ" : "КБ"}`;
+}
+const classificationLabels: Record<string,string> = {PUBLIC:"Публичный",INTERNAL:"Внутренний",CONFIDENTIAL:"Конфиденциальный",STRICTLY_CONFIDENTIAL:"Строго конфиденциальный"};
 async function api(path: string, method = "GET", body?: object) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -54,6 +62,7 @@ async function api(path: string, method = "GET", body?: object) {
 export function Drive({
   view = "spaces",
   searchOnly = false,
+  searchHost,
 }: {
   view?:
     | "mine"
@@ -64,6 +73,7 @@ export function Drive({
     | "favorites"
     | "trash";
   searchOnly?: boolean;
+  searchHost?: HTMLElement | null;
 }) {
   const [page, setPage] = useState(1);
   const [path, setPath] = useState<Item[]>([]);
@@ -204,32 +214,22 @@ export function Drive({
     );
   }
   return (
-    <section className="drive">
-      <Search
+    <section className={`drive ${selected ? "has-document" : ""}`}>
+      <Search host={searchHost}
         onOpen={async (hit) => {
           setTrash(false);
           await open(hit);
         }}
       />
-      <nav className="drive-toolbar" aria-label="Документы">
-        <div className="folder-title"><span className="eyebrow">Рабочее пространство</span><h2>{parent?.name ?? "Файлы и пространства"}</h2></div>
-        {!trash && parent && (parentPermissions.includes("CREATE") || parentPermissions.includes("CREATE_FOLDER")) && <button aria-expanded={createOpen} onClick={() => setCreateOpen(!createOpen)}>＋ Создать</button>}
+      {!selected && <nav className="drive-toolbar" aria-label="Документы">
+        <div className="folder-title"><h1>{parent?.name ?? ({mine:"Мои документы",spaces:"Общие пространства",departments:"Отделы",shared:"Доступные мне",recent:"Недавние",favorites:"Избранное",trash:"Корзина"}[view])}</h1></div>
+        {!selected && !trash && parent && (parentPermissions.includes("CREATE") || parentPermissions.includes("CREATE_FOLDER")) && <button aria-expanded={createOpen} onClick={() => setCreateOpen(!createOpen)}>＋ Создать</button>}
         {!trash && parent && parentPermissions.includes("CREATE") && <button className="primary" aria-expanded={uploadOpen} onClick={() => setUploadOpen(!uploadOpen)}>Загрузить файлы</button>}
         <button onClick={() => void run(reload)}>Обновить</button>
-        {path.length > 0 && (
-          <button
-            onClick={() => {
-              setPage(1);
-              setPath([]);
-              setSelected(null);
-            }}
-          >
-            К списку
-          </button>
-        )}
-      </nav>
+      </nav>}
       {!trash && (
-        <nav aria-label="Путь">
+        <nav className="breadcrumbs" aria-label="Путь">
+          <button onClick={() => {setPage(1);setPath([]);setSelected(null);setEditing(null)}}>{({mine:"Мои документы",spaces:"Общие пространства",departments:"Отделы",shared:"Доступные мне",recent:"Недавние",favorites:"Избранное",trash:"Корзина"}[view])}</button>
           {path.map((item, index) => (
             <button
               key={item.id}
@@ -244,84 +244,7 @@ export function Drive({
         </nav>
       )}
       <p role="status">{status}</p>
-      {!searchOnly && (
-        <><div className="file-table-heading" aria-hidden="true"><span>Название</span><span>Владелец / отдел</span><span>Размер</span><span /></div><ul className="file-list">
-          {rows.map((item) => (
-            <li key={item.id}>
-              {trash ? (
-                <>
-                  <span>{item.name}</span>
-                  <button
-                    onClick={() =>
-                      void run(async () => {
-                        await api(`/documents/${item.id}/restore`, "POST");
-                        await reload();
-                      })
-                    }
-                  >
-                    Восстановить
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => void run(() => open(item))}>
-                  {item.resource_type === "DOCUMENT" ? "▤" : "▣"} {item.name}
-                </button>
-              )}
-              {!trash && (
-                <button
-                  className="favorite-button"
-                  aria-label={
-                    item.favorite ? "Убрать из избранного" : "В избранное"
-                  }
-                  onClick={() =>
-                    void run(async () => {
-                      await api(
-                        `/favorites/${item.id}`,
-                        item.favorite ? "DELETE" : "PUT",
-                      );
-                      await reload();
-                    })
-                  }
-                >
-                  {item.favorite ? "★" : "☆"}
-                </button>
-              )}
-              <small className="file-owner">
-                {item.owner_name}{" "}
-                {item.department_name && " · " + item.department_name}{" "}
-              </small>
-              <span className="file-size">{item.size != null ? new Intl.NumberFormat("ru", { style: "unit", unit: "kilobyte", maximumFractionDigits: 1 }).format(item.size / 1024) : "—"}</span>
-            </li>
-          ))}
-        </ul></>
-      )}
-      {!searchOnly && !parentId && (
-        <nav aria-label="Страницы">
-          <button
-            disabled={page === 1}
-            onClick={() => {
-              setPage(page - 1);
-              setSelected(null);
-            }}
-          >
-            Предыдущая
-          </button>
-          <span>Страница {page}</span>
-          <button
-            disabled={rows.length < 100}
-            onClick={() => {
-              setPage(page + 1);
-              setSelected(null);
-            }}
-          >
-            Следующая
-          </button>
-        </nav>
-      )}
-      {!searchOnly && !rows.length && (
-        <p className="empty-state">Здесь пока нет доступных документов</p>
-      )}
-      {!trash && parent && (
+      {!selected && !trash && parent && (
         <>
           {parentPermissions.includes("CHANGE_ACL") && (
             <>
@@ -402,12 +325,88 @@ export function Drive({
           )}
         </>
       )}
+      {!selected && !searchOnly && (
+        <><div className="file-table-heading" aria-hidden="true"><span>Название</span><span>Владелец / отдел</span><span>Размер</span><span /></div><ul className="file-list">
+          {rows.map((item) => (
+            <li key={item.id}>
+              {trash ? (
+                <>
+                  <span>{item.name}</span>
+                  <button
+                    onClick={() =>
+                      void run(async () => {
+                        await api(`/documents/${item.id}/restore`, "POST");
+                        await reload();
+                      })
+                    }
+                  >
+                    Восстановить
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => void run(() => open(item))}>
+                  <FileIcon name={item.name} type={item.resource_type}/><span>{item.name}</span>
+                </button>
+              )}
+              {!trash && (
+                <button
+                  className="favorite-button"
+                  aria-label={
+                    item.favorite ? "Убрать из избранного" : "В избранное"
+                  }
+                  onClick={() =>
+                    void run(async () => {
+                      await api(
+                        `/favorites/${item.id}`,
+                        item.favorite ? "DELETE" : "PUT",
+                      );
+                      await reload();
+                    })
+                  }
+                >
+                  {item.favorite ? "★" : "☆"}
+                </button>
+              )}
+              <small className="file-owner">
+                {item.owner_name ?? "—"}{" "}
+                {item.department_name && " · " + item.department_name}{" "}
+              </small>
+              <span className="file-size">{formatSize(item.size)}</span>
+            </li>
+          ))}
+        </ul></>
+      )}
+      {!selected && !searchOnly && !parentId && (
+        <nav aria-label="Страницы">
+          <button
+            disabled={page === 1}
+            onClick={() => {
+              setPage(page - 1);
+              setSelected(null);
+            }}
+          >
+            Предыдущая
+          </button>
+          <span>Страница {page}</span>
+          <button
+            disabled={rows.length < 100}
+            onClick={() => {
+              setPage(page + 1);
+              setSelected(null);
+            }}
+          >
+            Следующая
+          </button>
+        </nav>
+      )}
+      {!selected && !searchOnly && !rows.length && (
+        <p className="empty-state">Здесь пока нет доступных документов</p>
+      )}
       {selected && !trash && (
         <article className="document-detail">
-          <div className="document-heading"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><h3>{selected.name}</h3><button aria-label="Закрыть документ" onClick={() => {setSelected(null); setPreview(false); setEditing(null)}}>✕</button></div>
-          <p>
-            {selected.mime_type} · {selected.size.toLocaleString()} байт
-          </p>
+          <div className="document-heading"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><h1>{selected.name}</h1><button aria-label="Закрыть документ" onClick={() => {setSelected(null); setPreview(false); setEditing(null)}}>✕</button></div>
+          <p className="document-subtitle">{selected.name.split(".").at(-1)?.toUpperCase()} · {formatSize(selected.size)}</p>
+          <div className="document-actions"><button aria-label="Обновить документ" onClick={()=>void run(()=>loadDocument(selected.id))}>↻</button>
 
           {permissions.includes("EDIT") &&
             /\.(docx|xlsx|pptx)$/i.test(selected.name) && (
@@ -421,6 +420,8 @@ export function Drive({
           {permissions.includes("DOWNLOAD") && (
             <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>
           )}
+          {permissions.includes("SHARE") && <button onClick={()=>setDetailTab("access")}>Поделиться</button>}
+          </div>
           <div className="document-body"><div className="document-canvas">
           {editing === selected.id ? <OfficeEditor documentId={editing} onClose={() => setEditing(null)} /> : !preview && <div className="preview-placeholder"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><strong>{selected.name}</strong><p>{/\.(docx|xlsx|pptx)$/i.test(selected.name) ? "Откройте документ в ONLYOFFICE с помощью кнопки выше." : "Выберите «Предпросмотр», чтобы увидеть содержимое, если формат поддерживается."}</p></div>}
           {preview && (
@@ -435,6 +436,7 @@ export function Drive({
           )}
           </div><aside className="document-sidebar">
           <nav className="tabs" aria-label="Панель документа">{[["info", "Сведения"], ["access", "Доступ"], ["versions", "Версии"]].map(([key, label]) => <button key={key} aria-current={detailTab === key ? "page" : undefined} onClick={() => setDetailTab(key)}>{label}</button>)}</nav>
+          <div className="classification-badge">{classificationLabels[classification] ?? classification}</div>
           <section hidden={detailTab !== "info"}>
           <dl>
             <dt>Владелец</dt>
@@ -450,9 +452,9 @@ export function Drive({
                 selected.department_id}
             </dd>
           </dl>
-          {!permissions.includes("EDIT") && <p>{selected.metadata.description || "Описание не добавлено"}</p>}
+          <p className="muted">{selected.metadata.description || "Описание не добавлено"}</p>
           {permissions.includes("RENAME") && (
-            <form
+            <details className="document-form"><summary>Переименовать документ</summary><form
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
@@ -472,10 +474,10 @@ export function Drive({
                 />
               </label>
               <button>Переименовать</button>
-            </form>
+            </form></details>
           )}
           {permissions.includes("EDIT") && (
-            <form
+            <details className="document-form"><summary>Изменить сведения</summary><form
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
@@ -554,7 +556,7 @@ export function Drive({
                 <input value={tags} onChange={(e) => setTags(e.target.value)} />
               </label>
               <button>Сохранить</button>
-            </form>
+            </form></details>
           )}
           {(["move", "copy"] as const).map(
             (action) =>

@@ -32,7 +32,8 @@ export function Upload({ parentId, documentId }: { parentId?: string; documentId
     <h2>{documentId ? 'Новая версия' : 'Загрузить файл'}</h2>
     {!parentId && !documentId && <label>Папка (UUID) <input value={parent} onChange={e => setParent(e.target.value)} /></label>}
     <p className="muted">{documentId ? "Замените содержимое этого документа файлом того же формата. Предыдущая версия сохранится в истории." : "Выберите один или несколько файлов. Доступ появится после антивирусной проверки."}</p>
-    <input aria-label="Выберите файл" type="file" multiple accept=".docx,.xlsx,.pptx,.pdf,.zip,.jpg,.jpeg,.png,.dwg,.psd,.txt,.csv,.json,.xml" onChange={e => setFiles(Array.from(e.target.files ?? []))} />
+    <label className="file-picker"><span>Выбрать файлы</span><input className="sr-only" aria-label="Выберите файл" type="file" multiple accept=".docx,.xlsx,.pptx,.pdf,.zip,.jpg,.jpeg,.png,.dwg,.psd,.txt,.csv,.json,.xml" onChange={e => setFiles(Array.from(e.target.files ?? []))} /></label>
+    {files.length>0 && <p className="selected-files">{files.map(file=>file.name).join(", ")}</p>}
     <button disabled={busy || !files.length || !(documentId || parentId || parent)} onClick={() => void upload()}>Загрузить</button>
     <p role="status">{status}</p>
   </section>

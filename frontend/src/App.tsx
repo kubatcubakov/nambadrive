@@ -9,6 +9,7 @@ import { ExternalShare } from "./Shares";
 import { ResourceAdmin } from "./ResourceAdmin";
 import { OrganizationAdmin } from "./OrganizationAdmin";
 import { IdentityAdmin } from "./IdentityAdmin";
+import { Icon } from "./Icons";
 import { AdminDashboard } from "./AdminDashboard";
 
 type UserProfile = {
@@ -61,6 +62,7 @@ export function App() {
     administration: false,
     organization: false,
   });
+  const [searchHost, setSearchHost] = useState<HTMLDivElement | null>(null);
   const [adminTab, setAdminTab] = useState("overview");
   const loadMe = useCallback(async () => {
     try {
@@ -136,6 +138,7 @@ export function App() {
     );
   const title =
     navigation.find((n) => n[0] === view)?.[2] ?? "Администрирование";
+  const isDrive = ["mine", "spaces", "departments", "shared", "recent", "favorites", "trash", "search"].includes(view);
   const canAdmin = capabilities.administration || capabilities.organization;
   const tabs = capabilities.administration
     ? [
@@ -160,37 +163,41 @@ export function App() {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark" aria-hidden="true">▰</span> NambaDrive</div>
         <nav aria-label="Основная навигация">
-          {navigation.map(([key, icon, label]) => (
+          {navigation.filter(([key])=>!["requests","reviews","notifications","search","profile"].includes(key)).map(([key, , label]) => (
             <button
               key={key}
+              className={["requests","reviews","notifications","search","profile"].includes(key) ? "secondary-nav-item" : "primary-nav-item"}
               aria-current={view === key ? "page" : undefined}
               onClick={() => setView(key)}
             >
-              <span aria-hidden="true">{icon}</span>
+              <Icon name={key}/>
               {label}
             </button>
           ))}
+          <details className="more-navigation"><summary>Рабочие процессы</summary>{navigation.filter(([key])=>["requests","reviews","notifications","search","profile"].includes(key)).map(([key,,label])=><button key={key} aria-current={view===key?"page":undefined} onClick={()=>setView(key)}><Icon name={key}/>{label}</button>)}</details>
           {canAdmin && (
             <button
+              className="admin-link"
               aria-current={view === "administration" ? "page" : undefined}
               onClick={() => {
                 setView("administration");
                 if (!capabilities.administration) setAdminTab("organization");
               }}
             >
-              <span aria-hidden="true">⚙</span>Администрирование
+              <Icon name="administration"/>Администрирование
             </button>
           )}
         </nav>
         <div className="sidebar-user">
-          <span className="avatar" aria-hidden="true">{user.display_name.slice(0, 1)}</span><strong>{user.display_name}</strong>
+          <span className="avatar" aria-hidden="true">{user.display_name.slice(0, 1)}</span><button className="profile-link" aria-label="Открыть профиль" onClick={()=>setView("profile")}>{user.display_name}</button>
           <button onClick={() => void logout()}>Выйти</button>
         </div>
       </aside>
-      <main className="workspace">
+      <main className={`workspace ${isDrive ? "drive-workspace" : ""}`}>
         <header className="workspace-header">
-          <h1>{title}</h1>
-          <div className="header-actions"><button aria-label="Открыть поиск" onClick={() => setView("search")}>⌕ Поиск</button><button aria-label="Открыть уведомления" onClick={() => setView("notifications")}>♧ Уведомления</button></div>
+          <h1 aria-hidden={isDrive || undefined} className={isDrive ? "sr-only" : undefined}>{title}</h1>
+          {isDrive && <div className="search-host" ref={setSearchHost}/> }
+          <div className="header-actions">{!isDrive && <button aria-label="Открыть поиск" onClick={() => setView("search")}><Icon name="search"/></button>}<button aria-label="Открыть уведомления" onClick={() => setView("notifications")}><Icon name="notifications"/></button></div>
         </header>
         <p role="status">{error}</p>
         {[
@@ -207,6 +214,7 @@ export function App() {
             key={view}
             view={view === "search" ? "mine" : (view as DriveView)}
             searchOnly={view === "search"}
+            searchHost={searchHost}
           />
         )}
         {view === "requests" && <AccessRequests />}

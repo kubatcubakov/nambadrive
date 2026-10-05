@@ -19,3 +19,9 @@ No backend/schema/API changes are included. System administrators do not gain do
 TypeScript/Vite build, ESLint, secret scan, backend suite including branch authorization coverage, and Chromium UI regression tests. Browser tests cover backend-driven visibility and revocation, responsive layout, named organization assignments with unchanged CSRF/PUT contract, distinct folder upload and version controls, and unsupported Office raster preview suppression. Browser tests use mocked API responses and do not replace real end-to-end runtime acceptance.
 
 The UI branch is based on `codex/oidc-jit-provisioning` so that the user's opted-in account creation behavior is preserved. It does not merge or deploy either change.
+
+## Mockup fidelity correction
+
+After reviewing the installed pilot UI, the first iteration was found to retain a stacked search block and a document card below the file table. The refinement moves the existing search form into the global header (React portal, unchanged search API), makes an open document replace the file table, places metadata/access/version panels beside its workspace, collapses editable metadata forms, and groups secondary navigation under Workflows. File icons, typography, spacing, classification badges and named file selection are adjusted to the approved concept. No DOCX raster preview is fabricated; Office content still requires the signed ONLYOFFICE flow.
+
+The browser regression explicitly checks that the document title appears near the top of the viewport and that folder upload/list controls disappear in document mode. Revocation is rechecked through the document refresh action, which clears previously shown detail before retrying the authorized API.

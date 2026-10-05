@@ -84,6 +84,7 @@ test("reader navigation, favorites and download UI follow backend capabilities",
   await expect(
     page.getByRole("heading", { name: "Договор поставки.txt" }),
   ).toBeVisible();
+  expect((await page.getByRole("heading",{name:"Договор поставки.txt"}).boundingBox())?.y).toBeLessThan(250);
   await expect(
     page.getByRole("link", { name: "Скачать", exact: true }),
   ).toHaveCount(0);
@@ -147,7 +148,7 @@ test("mobile layout and revoked document do not retain stale detail", async ({
       json: { error: { message: "Access denied" } },
     }),
   );
-  await page.getByRole("button", { name: "Договор поставки.txt" }).click();
+  await page.getByRole("button", { name: "Обновить документ", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Договор поставки.txt" }),
   ).toHaveCount(0);
@@ -199,11 +200,29 @@ test("folder upload is distinct from a new version and unsupported office previe
   await page.getByRole("button",{name:"Загрузить",exact:true}).click();
   expect(new URL((await upload).url()).searchParams.get("parent_id")).toBe(folder);
   await expect(page.getByText("Принято файлов: 1. Они появятся в папке после антивирусной проверки.")).toBeVisible();
+  await page.screenshot({path:info.outputPath("file-list.png"),fullPage:true});
   await page.getByRole("button",{name:"Договор.docx",exact:false}).click();
+  await expect(page.getByRole("button",{name:"Загрузить файлы",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Договор.docx",exact:false})).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Предпросмотр",exact:true})).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Открыть в редакторе",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).not.toBeVisible();
   await page.getByRole("button",{name:"Версии",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).toBeVisible();
   await page.screenshot({path:info.outputPath("file-workspace.png"),fullPage:true});
+});
+
+test("global header search keeps the existing encoded API and clears results", async ({page})=>{
+  await fixture(page);
+  await page.route("**/api/v1/search?*",r=>r.fulfill({json:{data:[{...doc,snippet:"Согласованный договор"}]}}));
+  await page.goto("/");
+  const input=page.getByRole("searchbox").or(page.getByLabel("Поиск по имени и содержимому",{exact:true}));
+  await input.fill("договор IT");
+  const search=page.waitForRequest(r=>r.url().includes("/api/v1/search?"));
+  await page.getByRole("button",{name:"Найти",exact:true}).click();
+  expect(new URL((await search).url()).searchParams.get("q")).toBe("договор IT");
+  await expect(page.getByText("Согласованный договор",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Очистить",exact:true}).click();
+  await expect(input).toHaveValue("");
+  await expect(page.getByText("Согласованный договор",{exact:true})).toHaveCount(0);
 });
