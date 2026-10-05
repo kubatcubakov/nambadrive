@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.v1.access_requests import router as access_requests_router
+from app.api.v1.access_reviews import router as access_reviews_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.governance import router as governance_router
@@ -46,6 +47,7 @@ app = FastAPI(
 )
 
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)
+app.include_router(access_reviews_router, prefix=settings.api_v1_prefix)
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(governance_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)

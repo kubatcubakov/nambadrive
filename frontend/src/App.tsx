@@ -1,3 +1,4 @@
+import { AccessReviews } from './AccessReviews'
 import { Drive } from './Drive'
 import { Notifications } from './Notifications'
 import { Quotas } from './Quotas'
@@ -101,6 +102,7 @@ export function App() {
             <ResourceAdmin />
             <Drive />
             <AccessRequests />
+            <AccessReviews />
             <Governance />
             <Quotas />
             <Notifications />

@@ -5,6 +5,7 @@ from app.models.user import User
 __all__ = ["ApplicationSession", "Base", "User"]
 
 from app.models.access_request import AccessRequest  # noqa: F401
+from app.models.access_review import AccessReview, AccessReviewItem  # noqa: F401
 from app.models.acl import (  # noqa: F401
     ACLEntry,
     BreakGlassGrant,

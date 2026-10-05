@@ -112,7 +112,9 @@ class ACLAdministrationService:
     def record(entry: ACLEntry) -> dict[str, str]:
         return {column.name: str(getattr(entry, column.name)) for column in entry.__table__.columns}
 
-    async def revoke(self, resource_id: uuid.UUID, entry_id: uuid.UUID) -> None:
+    async def revoke(
+        self, resource_id: uuid.UUID, entry_id: uuid.UUID, *, commit: bool = True
+    ) -> None:
         await self.require(resource_id)
         entry = await self.db.get(ACLEntry, entry_id, with_for_update=True)
         if entry is None or entry.resource_id != resource_id:
@@ -129,7 +131,8 @@ class ACLAdministrationService:
             new_acl=self.record(entry),
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
 
     async def break_glass(
         self, resource_id: uuid.UUID, permission: str, reason: str, minutes: int
@@ -213,7 +216,9 @@ class ACLAdministrationService:
         await self.db.commit()
         return binding
 
-    async def revoke_binding(self, resource_id: uuid.UUID, binding_id: uuid.UUID) -> None:
+    async def revoke_binding(
+        self, resource_id: uuid.UUID, binding_id: uuid.UUID, *, commit: bool = True
+    ) -> None:
         await self.require(resource_id)
         binding = await self.db.get(RoleBinding, binding_id, with_for_update=True)
         if binding is None or binding.resource_id != resource_id:
@@ -235,4 +240,5 @@ class ACLAdministrationService:
             new_acl=new,
             **self.context,
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()

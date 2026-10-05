@@ -10,6 +10,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.authorization.service import AuthorizationService
 from app.models.access_request import AccessRequest
+from app.models.access_review import AccessReview
 from app.models.acl import BreakGlassGrant
 from app.models.document import DocumentVersion
 from app.models.notification import Notification, NotificationDelivery, NotificationSource
@@ -18,6 +19,7 @@ from app.models.resource import Resource
 from app.models.user import User
 
 MESSAGES = {
+    "REVIEW_DUE": "Квартальный пересмотр доступа ожидает вашего решения.",
     "QUOTA": "Превышена квота хранилища. Новая запись отклонена.",
     "ACCESS_PENDING": "Новый запрос доступа ожидает решения владельца или менеджера.",
     "ACCESS_DECIDED": "По вашему запросу доступа принято решение. Откройте раздел запросов.",
@@ -103,10 +105,12 @@ class NotificationService:
                 type[QuotaIncident]
                 | type[AccessRequest]
                 | type[DocumentVersion]
-                | type[BreakGlassGrant],
+                | type[BreakGlassGrant]
+                | type[AccessReview],
                 ColumnElement[bool] | None,
             ]
         ] = [
+            ("REVIEW_DUE", AccessReview, AccessReview.completed_at.is_(None)),
             ("QUOTA", QuotaIncident, None),
             ("ACCESS_PENDING", AccessRequest, None),
             ("ACCESS_DECIDED", AccessRequest, AccessRequest.status != "PENDING"),
@@ -130,7 +134,8 @@ class NotificationService:
                 query = query.where(condition)
             for source in (await self.db.scalars(query)).all():
                 if not isinstance(
-                    source, (QuotaIncident, AccessRequest, DocumentVersion, BreakGlassGrant)
+                    source,
+                    (QuotaIncident, AccessRequest, DocumentVersion, BreakGlassGrant, AccessReview),
                 ):
                     raise TypeError("Invalid notification source")
                 recipients: dict[uuid.UUID, bool] = {}
@@ -143,6 +148,14 @@ class NotificationService:
                 elif isinstance(source, DocumentVersion):
                     resource_id = source.document_id
                     recipients[source.uploaded_by] = False
+                elif isinstance(source, AccessReview):
+                    for user in users:
+                        if (
+                            await self.authorization.authorize_request_approval(
+                                self.db, user, source.resource_id
+                            )
+                        ).allowed:
+                            recipients[user.id] = False
                 elif isinstance(source, AccessRequest):
                     if kind == "ACCESS_DECIDED":
                         recipients[source.requested_by] = False
