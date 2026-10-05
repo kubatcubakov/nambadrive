@@ -1,0 +1,18 @@
+cluster.name: nambadrive
+node.name: data01
+discovery.type: single-node
+network.host: 0.0.0.0
+plugins.security.ssl.transport.pemcert_filepath: tls/server.crt
+plugins.security.ssl.transport.pemkey_filepath: tls/server.key
+plugins.security.ssl.transport.pemtrustedcas_filepath: tls/ca.crt
+plugins.security.ssl.transport.enforce_hostname_verification: true
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.http.pemcert_filepath: tls/server.crt
+plugins.security.ssl.http.pemkey_filepath: tls/server.key
+plugins.security.ssl.http.pemtrustedcas_filepath: tls/ca.crt
+plugins.security.allow_default_init_securityindex: false
+plugins.security.allow_unsafe_democertificates: false
+plugins.security.nodes_dn:
+  - CN=nambadrive-search
+plugins.security.authcz.admin_dn:
+  - CN=nambadrive-search-bootstrap

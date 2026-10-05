@@ -318,3 +318,20 @@ async def test_office_save_audit_failure_is_atomic(db, office):
         == 1
     )
     assert await db.scalar(select(func.count()).select_from(OfficeSave)) == 0
+
+
+async def test_editor_session_recheck_refreshes_cached_revocation(db, office):
+    from sqlalchemy import update
+
+    service, _, _, _, _, session_id = office
+    session = await db.get(OfficeSession, session_id)
+    assert (await service.valid_actor(session)).enabled
+    await db.execute(
+        update(OfficeSession)
+        .where(OfficeSession.id == session_id)
+        .values(revoked_at=datetime.now(UTC))
+        .execution_options(synchronize_session=False)
+    )
+    with pytest.raises(HTTPException) as failure:
+        await service.valid_actor(session)
+    assert failure.value.status_code == 403

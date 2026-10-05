@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import ssl
 import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -32,6 +33,10 @@ class OfficeService:
         self.db, self.settings, self.context = db, settings, context
 
     async def valid_actor(self, session: OfficeSession) -> User:
+        current = await self.db.get(OfficeSession, session.id, populate_existing=True)
+        if current is None:
+            raise HTTPException(403, "Office session unavailable")
+        session = current
         now = datetime.now(UTC)
         application = await self.db.get(
             ApplicationSession, session.application_session_id, populate_existing=True
@@ -198,7 +203,10 @@ class OfficeService:
         safe_url = callback_download_url(url, self.settings)
         try:
             async with httpx.AsyncClient(
-                timeout=60, follow_redirects=False, trust_env=False
+                timeout=60,
+                follow_redirects=False,
+                trust_env=False,
+                verify=ssl.create_default_context(cafile=self.settings.http_ca_file),
             ) as client:
                 async with client.stream("GET", safe_url) as response:
                     if response.status_code != 200:

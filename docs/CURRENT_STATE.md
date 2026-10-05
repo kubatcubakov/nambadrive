@@ -22,8 +22,9 @@ Implementation checkpoint: 2026-10-05. Working branch `codex/phases-5-22`, draft
 | 17 | Quarterly owner/manager reviews, snapshots and audited revoke decisions; all seven CI jobs green |
 | 18 | Private SCIM provisioning, disabled-user revocation and audited ownership transfer/queue; all seven CI jobs green |
 | 19 | Responsive Drive navigation, private favorites/recent, visible-only pagination and admin dashboard; all seven CI jobs green, including Chromium |
-| 20 | Encrypted independent cold bundles, durable WAL hook and isolated real PostgreSQL/SeaweedFS restore; local gates green, eight CI jobs required before Phase 21 |
-| 21–22 | Pending |
+| 20 | Encrypted independent cold bundles, durable WAL hook and isolated real PostgreSQL/SeaweedFS restore; all eight CI jobs green, including real Linux backup/restore |
+| 21 | Fresh authorization/OIDC/logging hardening and complete pinned deployment profiles; local/PostgreSQL gates green, build/container/Compose CI required before Phase 22 |
+| 22 | Pending |
 
 Phase 13 validation: 443 local tests passed (12 opt-in runtime skips); 424 PostgreSQL regression tests passed, including immutable retention and hold/cleanup serialization. Authorization coverage remains above 90%. Migration upgrade/check/downgrade/upgrade, Ruff/mypy/Bandit/secret/dependency checks and frontend typecheck/lint/build pass. Per-phase documentation records exact APIs and validation boundaries.
 
@@ -33,4 +34,6 @@ Phase 19 validation: 542 local / 528 PostgreSQL tests passed; authorization cove
 
 Phase 20 validation: 551 local regression tests plus ten backup unit cases passed; 528 PostgreSQL regressions, migration roundtrip, Chromium and security/dependency gates green. Authorization coverage 95.88% local / 94.48% PostgreSQL. Real PG17.11/Seaweed4.48 recovery proved archived WAL replay beyond basebackup, object SHA-256 and preserved Legal Hold/quarantine/default-deny. Tiny fixture restore took 24.333 seconds; representative 500 GB RPO/RTO acceptance remains pending. See docs/phase20-backup-restore.md.
 
-Release work still required: deployment profiles/security hardening and full acceptance/performance/security testing. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Existing partial Compose configuration is not a production-ready stack.
+Phase 21 validation: 574 local tests plus an editor-session revocation regression passed (17 opt-in skips), 95.88% authorization coverage; 550 PostgreSQL tests plus the editor-session regression, migration roundtrip, Ruff/mypy/Bandit/secret/dependency/frontend/Chromium gates pass. Complete per-host Compose files and actual image builds/container scans are required in CI before Phase 22. See docs/phase21-hardening.md.
+
+Release work still required: final acceptance/performance/ZAP/security testing and real infrastructure/provider runtime acceptance. Real Authentik and live ONLYOFFICE remain explicit external/runtime acceptance boundaries. Complete Compose service definitions now require actual private TLS/firewall/credentials/failover acceptance before any production readiness claim.

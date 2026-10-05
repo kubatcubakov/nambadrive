@@ -1,121 +1,854 @@
-name: nambadrive
-
+# Same application/schema in every profile. Private host bindings require firewall/WireGuard preflight.
+name: nambadrive-aio-all
 services:
   nginx:
-    image: nginx:1.28-alpine
     restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_started
-    ports:
-      - "${HTTP_PORT:-8080}:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - edge
-      - app
     security_opt:
-      - no-new-privileges:true
-
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    user: '101'
+    ports:
+    - ${PUBLIC_IP:?}:80:8080
+    - ${PUBLIC_IP:?}:443:8443
+    networks:
+      app:
+        ipv4_address: 172.29.0.2
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/app.conf.template:/etc/nginx/templates/app.conf.template:ro
+    - ../common/nginx/office.conf.template:/etc/nginx/templates/office.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
+  scim-gateway:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    user: '101'
+    ports:
+    - ${PRIVATE_IP:?}:9443:9443
+    networks:
+      app:
+        ipv4_address: 172.29.0.4
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/scim.conf.template:/etc/nginx/templates/scim.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
+  office-backchannel:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    user: '101'
+    ports:
+    - ${PRIVATE_IP:?}:8444:8444
+    networks:
+      app:
+        aliases:
+        - ${BACKCHANNEL_DOMAIN:?}
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/office-backchannel.conf.template:/etc/nginx/templates/office-backchannel.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
   frontend:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 128m
     build:
       context: ../../frontend
-    restart: unless-stopped
-    expose:
-      - "80"
+    user: '101'
     networks:
-      - app
-    security_opt:
-      - no-new-privileges:true
-
+    - app
   backend:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
     build:
       context: ../../backend
-    restart: unless-stopped
-    environment:
-      NAMBADRIVE_APP_ENV: ${NAMBADRIVE_APP_ENV:-development}
-      NAMBADRIVE_PUBLIC_URL: ${NAMBADRIVE_PUBLIC_URL:-http://localhost:8080}
-      NAMBADRIVE_DATABASE_URL: ${NAMBADRIVE_DATABASE_URL}
-      NAMBADRIVE_REDIS_URL: ${NAMBADRIVE_REDIS_URL:-redis://redis:6379/0}
-      NAMBADRIVE_AUDIT_LOG_PATH: ${NAMBADRIVE_AUDIT_LOG_PATH:-/var/log/nambadrive/audit.json}
-      NAMBADRIVE_CSRF_SECRET: ${NAMBADRIVE_CSRF_SECRET}
-      NAMBADRIVE_OIDC_ISSUER: ${NAMBADRIVE_OIDC_ISSUER}
-      NAMBADRIVE_OIDC_DISCOVERY_URL: ${NAMBADRIVE_OIDC_DISCOVERY_URL}
-      NAMBADRIVE_OIDC_CLIENT_ID: ${NAMBADRIVE_OIDC_CLIENT_ID}
-      NAMBADRIVE_OIDC_CLIENT_SECRET: ${NAMBADRIVE_OIDC_CLIENT_SECRET}
-      NAMBADRIVE_OIDC_ALLOWED_ALGORITHMS: ${NAMBADRIVE_OIDC_ALLOWED_ALGORITHMS:-["RS256"]}
-      NAMBADRIVE_OIDC_TRANSACTION_TTL_SECONDS: ${NAMBADRIVE_OIDC_TRANSACTION_TTL_SECONDS:-600}
-      NAMBADRIVE_OIDC_CLOCK_SKEW_SECONDS: ${NAMBADRIVE_OIDC_CLOCK_SKEW_SECONDS:-60}
-      NAMBADRIVE_COOKIE_SECURE: ${NAMBADRIVE_COOKIE_SECURE:-false}
-      NAMBADRIVE_SESSION_TTL_SECONDS: ${NAMBADRIVE_SESSION_TTL_SECONDS:-28800}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose:
-      - "8000"
-    volumes:
-      - audit_logs:/var/log/nambadrive
+    user: '10001'
     networks:
-      - app
-      - data
-      - egress
+    - app
+    - services
+    - cache
+    - egress
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+  scan-worker:
+    restart: unless-stopped
     security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-
-  postgres:
-    image: postgres:17.11-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-nambadrive}
-      POSTGRES_USER: ${POSTGRES_USER:-nambadrive}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    expose:
-      - "5432"
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
     networks:
-      - data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nambadrive} -d ${POSTGRES_DB:-nambadrive}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-
+    - services
+    - cache
+    - egress
+    - av
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.documents.worker
+  search-worker:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
+    networks:
+    - services
+    - cache
+    - egress
+    - parser
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.search.worker
+  cleanup-worker:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
+    networks:
+    - services
+    - cache
+    - egress
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.governance.worker
+  notifications-worker:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
+    networks:
+    - services
+    - cache
+    - egress
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.notifications.worker
+  reviews-worker:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
+    networks:
+    - services
+    - cache
+    - egress
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.access_reviews.worker
+  lifecycle-worker:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../../backend
+    user: '10001'
+    networks:
+    - services
+    - cache
+    - egress
+    environment:
+      NAMBADRIVE_APP_ENV: production
+      NAMBADRIVE_COOKIE_SECURE: 'true'
+      NAMBADRIVE_PUBLIC_URL: https://${APP_DOMAIN:?}
+      NAMBADRIVE_SECRETS_DIR: /run/nambadrive-settings
+      NAMBADRIVE_OIDC_ISSUER: ${OIDC_ISSUER:?}
+      NAMBADRIVE_OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:?}
+      NAMBADRIVE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      NAMBADRIVE_S3_ENDPOINT: https://${S3_DOMAIN:?}:8333
+      NAMBADRIVE_OPENSEARCH_URL: https://${SEARCH_HOST:?}:9200
+      NAMBADRIVE_OPENSEARCH_CA_FILE: /tls/ca.crt
+      NAMBADRIVE_OPENSEARCH_USERNAME: ${SEARCH_USERNAME:?}
+      NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+      NAMBADRIVE_OFFICE_PUBLIC_URL: https://${OFFICE_DOMAIN:?}
+      NAMBADRIVE_OFFICE_INTERNAL_URL: ${OFFICE_INTERNAL_URL:?}
+      NAMBADRIVE_HTTP_CA_FILE: /tls/ca-bundle.crt
+      NAMBADRIVE_OFFICE_BACKEND_URL: ${OFFICE_BACKEND_URL:?}
+      NAMBADRIVE_CLAMAV_HOST: clamav
+      NAMBADRIVE_TIKA_URL: http://tika:9998
+      NAMBADRIVE_AUDIT_LOG_PATH: /var/log/nambadrive/audit.json
+      SSL_CERT_FILE: /tls/ca-bundle.crt
+      AWS_CA_BUNDLE: /tls/ca-bundle.crt
+      PGSSLROOTCERT: /tls/ca.crt
+    volumes:
+    - ${SETTINGS_DIR:?}:/run/nambadrive-settings:ro
+    - ${AUDIT_DIR:?}:/var/log/nambadrive
+    - ${TRUST_DIR:?}:/tls:ro
+    cpus: 2
+    command:
+    - python
+    - -m
+    - app.lifecycle.worker
   redis:
-    image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
-    expose:
-      - "6379"
-    networks:
-      - data
     security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 256m
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    user: '999'
+    networks:
+    - cache
+    command:
+    - redis-server
+    - --save
+    - ''
+    - --appendonly
+    - 'no'
+    - --protected-mode
+    - 'no'
+  clamav:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: false
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 3g
+    image: clamav/clamav:1.5.4@sha256:ebec5bc138401b36ae987caa1a3fa3c3b2a21ed3d51f0bfa5852825e663e67b0
+    networks:
+    - av
+    - egress
+    cap_add:
+    - CHOWN
+    - SETUID
+    - SETGID
+    volumes:
+    - ../aio/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+    - clamav_definitions:/var/lib/clamav
+  tika:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    build:
+      context: ../common/tika
+    user: '10001'
+    networks:
+    - parser
+    cpus: 2
+  onlyoffice:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: false
+    pids_limit: 1024
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 6g
+    build:
+      context: ../common/office
+    cap_add:
+    - CHOWN
+    - SETUID
+    - SETGID
+    - DAC_OVERRIDE
+    - NET_BIND_SERVICE
+    networks:
+      app:
+        ipv4_address: 172.29.0.20
+    cpus: 4
+    environment:
+      JWT_ENABLED: 'true'
+      JWT_HEADER: Authorization
+      JWT_IN_BODY: 'false'
+      ALLOW_PRIVATE_IP_ADDRESS: 'true'
+      NODE_EXTRA_CA_CERTS: /tls/ca-bundle.crt
+    volumes:
+    - ${TRUST_DIR:?}:/tls:ro
+    - ${OFFICE_CONFIG_FILE:?}:/run/private/office-local.json:ro
+    - office_data:/var/www/onlyoffice/Data
+    - office_cache:/var/lib/onlyoffice
+    - office_logs:/var/log/onlyoffice
+  postgres:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: false
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 8g
+    build:
+      context: ../common/postgres
+    cap_add:
+    - CHOWN
+    - SETUID
+    - SETGID
+    - DAC_OVERRIDE
+    networks:
+    - services
+    - egress
+    environment:
+      POSTGRES_DB: nambadrive
+      POSTGRES_USER: nambadrive
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_password
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - ${DATABASE_PASSWORD_FILE:?}:/run/secrets/database_password:ro
+    - ${DB_TLS_DIR:?}:/tls:ro
+    - ${INDEPENDENT_WAL_DIR:?}:/independent-wal
+    - ../common/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    - ../common/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command:
+    - postgres
+    - -c
+    - config_file=/etc/postgresql/postgresql.conf
+    - -c
+    - hba_file=/etc/postgresql/pg_hba.conf
+  opensearch:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: false
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 6g
+    image: opensearchproject/opensearch:3.9.0@sha256:adfa61f85025d06b4aeb562e7e74fde7e31c437039c93c3862c17e9acebd6c7c
+    user: '1000'
+    networks:
+      services:
+        aliases:
+        - ${SEARCH_HOST:?}
+    cpus: 2
+    environment:
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms2g -Xmx2g
+    volumes:
+    - search_data:/usr/share/opensearch/data
+    - ${OPENSEARCH_CONFIG_FILE:?}:/usr/share/opensearch/config/opensearch.yml:ro
+    - ${SEARCH_TLS_DIR:?}:/usr/share/opensearch/config/tls:ro
+    - ${SEARCH_SECURITY_DIR:?}:/usr/share/opensearch/config/opensearch-security:ro
+  master:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - master_data:/data
+    command:
+    - master
+    - -ip.bind=0.0.0.0
+    - -mdir=/data
+    - -ip=master
+    - -port=9333
+    - -port.grpc=19333
+    - -peers=none
+    - -telemetry=false
+    - -defaultReplication=000
+  volume:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - volume_data:/data
+    command:
+    - volume
+    - -ip.bind=0.0.0.0
+    - -dir=/data
+    - -ip=volume
+    - -port=8080
+    - -port.grpc=18080
+    - -master=master:9333
+    - -max=200
+  filer:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - filer_data:/data
+    - ../common/seaweed/filer.toml:/etc/seaweedfs/filer.toml:ro
+    command:
+    - filer
+    - -ip.bind=0.0.0.0
+    - -ip=filer
+    - -port=8888
+    - -port.grpc=18888
+    - -master=master:9333
+  s3:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - ${S3_CONFIG_FILE:?}:/run/secrets/s3.json:ro
+    command:
+    - s3
+    - -ip.bind=0.0.0.0
+    - -ip=s3
+    - -port=8333
+    - -filer=filer:8888
+    - -port.iceberg=0
+    - -port.lance=0
+    - -iam=false
+    - -config=/run/secrets/s3.json
+  s3-gateway:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    - /etc/nginx/conf.d:rw,noexec,nosuid,uid=101,gid=101
+    - /var/cache/nginx:rw,noexec,nosuid,uid=101,gid=101
+    - /var/run:rw,noexec,nosuid,uid=101,gid=101
+    mem_limit: 1g
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    user: '101'
+    ports: []
+    networks:
+      services:
+        aliases:
+        - ${S3_DOMAIN:?}
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?}
+      OFFICE_DOMAIN: ${OFFICE_DOMAIN:?}
+      SCIM_DOMAIN: ${SCIM_DOMAIN:?}
+      S3_DOMAIN: ${S3_DOMAIN:?}
+      AUTHENTIK_CIDR: ${AUTHENTIK_CIDR:?}
+      APP_PRIVATE_ADDRESS: ${APP_PRIVATE_ADDRESS:?}
+      OFFICE_CIDR: ${OFFICE_CIDR:?}
+      BACKCHANNEL_DOMAIN: ${BACKCHANNEL_DOMAIN:?}
+      NGINX_ENVSUBST_FILTER: ^(APP_DOMAIN|OFFICE_DOMAIN|SCIM_DOMAIN|S3_DOMAIN|AUTHENTIK_CIDR|OFFICE_CIDR|BACKCHANNEL_DOMAIN|APP_PRIVATE_ADDRESS)$
+    volumes:
+    - ../common/nginx/s3.conf.template:/etc/nginx/templates/s3.conf.template:ro
+    - ../common/nginx/proxy-private.conf:/etc/nginx/proxy-private.conf:ro
+    - ${TLS_DIR:?}:/tls:ro
+  volume-bootstrap:
+    restart: 'no'
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 1g
+    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    user: '0'
+    profiles:
+    - bootstrap
+    cap_add:
+    - CHOWN
+    - FOWNER
+    networks:
+    - services
+    volumes:
+    - search_data:/bootstrap/search_data
+    - master_data:/bootstrap/master_data
+    - volume_data:/bootstrap/volume_data
+    - filer_data:/bootstrap/filer_data
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - test -z "$(find /bootstrap/search_data -mindepth 1 -print -quit)" && chown 1000:1000
+      /bootstrap/search_data && chmod 700 /bootstrap/search_data && test -z "$(find
+      /bootstrap/master_data -mindepth 1 -print -quit)" && chown 10001:10001 /bootstrap/master_data
+      && chmod 700 /bootstrap/master_data && test -z "$(find /bootstrap/volume_data
+      -mindepth 1 -print -quit)" && chown 10001:10001 /bootstrap/volume_data && chmod
+      700 /bootstrap/volume_data && test -z "$(find /bootstrap/filer_data -mindepth
+      1 -print -quit)" && chown 10001:10001 /bootstrap/filer_data && chmod 700 /bootstrap/filer_data
 networks:
-  edge:
   app:
     internal: true
-  data:
+    ipam:
+      config:
+      - subnet: 172.29.0.0/24
+  services:
     internal: true
-  egress:
-
+  cache:
+    internal: true
+  av:
+    internal: true
+  parser:
+    internal: true
+  egress: {}
 volumes:
-  postgres_data:
-  audit_logs:
+  clamav_definitions: {}
+  office_data: {}
+  office_cache: {}
+  office_logs: {}
+  postgres_data: {}
+  search_data: {}
+  master_data: {}
+  volume_data: {}
+  filer_data: {}

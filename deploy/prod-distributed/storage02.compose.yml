@@ -1,0 +1,119 @@
+# Same application/schema in every profile. Private host bindings require firewall/WireGuard preflight.
+name: nambadrive-prod-distributed-storage02
+services:
+  master02:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - master02_data:/data
+    ports:
+    - ${PRIVATE_IP:?}:9333:9333
+    - ${PRIVATE_IP:?}:19333:19333
+    command:
+    - master
+    - -ip.bind=0.0.0.0
+    - -mdir=/data
+    - -ip=${PRIVATE_IP:?}
+    - -port=9333
+    - -port.grpc=19333
+    - -peers=${MASTER_PEERS:?}
+    - -telemetry=false
+    - -defaultReplication=001
+  volume02:
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 2g
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: '10001'
+    networks:
+    - services
+    - egress
+    cpus: 2
+    volumes:
+    - ${WEED_SECURITY_FILE:?}:/etc/seaweedfs/security.toml:ro
+    - ${WEED_TLS_DIR:?}:/tls:ro
+    - volume02_data:/data
+    ports:
+    - ${PRIVATE_IP:?}:8080:8080
+    - ${PRIVATE_IP:?}:18080:18080
+    command:
+    - volume
+    - -ip.bind=0.0.0.0
+    - -dir=/data
+    - -ip=${PRIVATE_IP:?}
+    - -port=8080
+    - -port.grpc=18080
+    - -master=${MASTER_PEERS:?}
+    - -max=200
+  volume-bootstrap:
+    restart: 'no'
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    read_only: true
+    pids_limit: 256
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+    mem_limit: 1g
+    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    user: '0'
+    profiles:
+    - bootstrap
+    cap_add:
+    - CHOWN
+    - FOWNER
+    networks:
+    - services
+    volumes:
+    - master02_data:/bootstrap/master02_data
+    - volume02_data:/bootstrap/volume02_data
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - test -z "$(find /bootstrap/master02_data -mindepth 1 -print -quit)" && chown
+      10001:10001 /bootstrap/master02_data && chmod 700 /bootstrap/master02_data &&
+      test -z "$(find /bootstrap/volume02_data -mindepth 1 -print -quit)" && chown
+      10001:10001 /bootstrap/volume02_data && chmod 700 /bootstrap/volume02_data
+networks:
+  app:
+    internal: true
+    ipam:
+      config:
+      - subnet: 172.29.0.0/24
+  services:
+    internal: true
+  cache:
+    internal: true
+  av:
+    internal: true
+  parser:
+    internal: true
+  egress: {}
+volumes:
+  master02_data: {}
+  volume02_data: {}

@@ -1,11 +1,13 @@
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.scim import router as scim_router
 from app.api.v1.access_requests import router as access_requests_router
@@ -29,8 +31,10 @@ from app.core.config import get_settings
 from app.core.database import engine
 from app.core.redis import redis_client
 from app.search.clients import SearchUnavailable
+from app.security.logging import configure_transport_logging
 from app.storage.seaweed import StorageError
 
+configure_transport_logging()
 settings = get_settings()
 
 
@@ -46,8 +50,24 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url="/redoc" if settings.app_env != "production" else None,
+    openapi_url="/openapi.json" if settings.app_env != "production" else None,
     lifespan=lifespan,
 )
+
+if settings.app_env == "production":
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=[
+            host
+            for host in (
+                urlsplit(settings.public_url).hostname,
+                urlsplit(settings.office_backend_url).hostname,
+                "backend",
+                "127.0.0.1",
+            )
+            if host is not None
+        ],
+    )
 
 app.include_router(drive_router, prefix=settings.api_v1_prefix)
 app.include_router(scim_router)
@@ -118,6 +138,13 @@ async def correlation(
     try:
         response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if settings.app_env == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         return response
     finally:
         audit_context.reset(token)

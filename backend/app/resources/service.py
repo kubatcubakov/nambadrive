@@ -26,7 +26,7 @@ class ResourceService:
             if current in seen:
                 raise ValueError("Resource hierarchy cycle")
             seen.add(current)
-            row = await self.db.get(Resource, current)
+            row = await self.db.get(Resource, current, populate_existing=True)
             if row is None:
                 raise ValueError("Resource hierarchy incomplete")
             rows.append(row)

@@ -1,0 +1,17 @@
+server {
+    listen 8333 ssl;
+    server_name ${S3_DOMAIN};
+    ssl_certificate /tls/server.crt;
+    ssl_certificate_key /tls/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    access_log off;
+    server_tokens off;
+    client_max_body_size 501m;
+    proxy_read_timeout 180s;
+    location / {
+        proxy_pass http://s3:8333;
+        proxy_set_header Host $http_host;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+    }
+}
