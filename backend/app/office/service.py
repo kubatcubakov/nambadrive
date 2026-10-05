@@ -150,6 +150,21 @@ class OfficeService:
             "exp": int(utc(session.expires_at).timestamp()),
             "iat": int(now.timestamp()),
         }
+        # Record delegated capabilities before issuing the signed editor session.
+        # The event is capability issuance, not a claim that paper was printed.
+        for capability, event in [
+            ("print", "print"),
+            ("download", "download"),
+            ("copy", "clipboard_copy"),
+        ]:
+            if permissions[capability]:
+                await service.audit(
+                    event,
+                    document,
+                    operation="office_capability_issued",
+                    office_session=str(session.id),
+                    expires_at=session.expires_at.isoformat(),
+                )
         config["token"] = jwt.encode(
             config, self.settings.office_browser_secret.get_secret_value(), algorithm="HS256"
         )

@@ -19,6 +19,8 @@ from app.api.v1.quotas import router as quotas_router
 from app.api.v1.resources import router as resources_router
 from app.api.v1.search import router as search_router
 from app.api.v1.shares import router as shares_router
+from app.audit.context import audit_context
+from app.audit.writer import write_audit_event
 from app.core.config import get_settings
 from app.core.database import engine
 from app.core.redis import redis_client
@@ -98,13 +100,34 @@ async def correlation(
     except ValueError:
         correlation_id = str(uuid.uuid4())
     request.state.correlation_id = correlation_id
-    response = await call_next(request)
-    response.headers["X-Correlation-ID"] = correlation_id
-    return response
+    token = audit_context.set(
+        {
+            "correlation_id": correlation_id,
+            "ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("User-Agent"),
+        }
+    )
+    try:
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
+    finally:
+        audit_context.reset(token)
 
 
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+    if exc.status_code in {401, 403}:
+        try:
+            await write_audit_event(
+                "access_denied",
+                result="denied",
+                status=exc.status_code,
+                method=request.method,
+                route=getattr(request.scope.get("route"), "path", "unmatched"),
+            )
+        except OSError as error:
+            return await unavailable(request, error)
     return JSONResponse(
         status_code=exc.status_code,
         headers=exc.headers,

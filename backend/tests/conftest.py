@@ -1,5 +1,6 @@
 import os
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -43,3 +44,13 @@ async def db():
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             yield session
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def isolated_audit_path(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "app.audit.writer.get_settings",
+        lambda: SimpleNamespace(audit_log_path=str(tmp_path / "audit.jsonl")),
+    )

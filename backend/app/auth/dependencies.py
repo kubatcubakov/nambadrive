@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.context import audit_context
 from app.auth.csrf import csrf_valid
 from app.auth.sessions import get_session_user
 from app.core.config import get_settings
@@ -26,6 +27,9 @@ async def current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalid or expired"
         )
     _, user = result
+    context = audit_context.get()
+    if context is not None:
+        context["user"] = str(user.id)
     return user
 
 

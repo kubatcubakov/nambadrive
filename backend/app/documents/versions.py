@@ -65,7 +65,8 @@ class VersionService:
         self.documents = DocumentService(db, actor, context)
 
     async def history(self, document_id: uuid.UUID) -> list[DocumentVersion]:
-        await self.documents.require(document_id, "VIEW_VERSION_HISTORY")
+        document = await self.documents.require(document_id, "VIEW_VERSION_HISTORY")
+        await self.documents.audit("view", document, operation="version_history")
         return list(
             (
                 await self.db.scalars(
