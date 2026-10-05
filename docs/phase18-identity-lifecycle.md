@@ -10,6 +10,29 @@ Primary integration references: [Authentik SCIM provider](https://docs.goauthent
 
 ## Operations
 
+### Optional creation on first OIDC login
+
+At the operator's explicit request, set `NAMBADRIVE_OIDC_JIT_PROVISIONING=true` on
+the backend to create an unknown local user after a fully validated OIDC callback,
+without waiting for an initial SCIM synchronization. The default is `false`, so
+existing deployments retain their prior-provisioning requirement. No migration is
+required. Set the flag in the Compose override, rebuild the backend image, and
+recreate the backend; setting the variable on older code has no effect.
+
+The immutable OIDC `sub` remains the only identity key. Matching email or username
+does not link to another account. New accounts receive no administrator, manager,
+department membership, role binding or document ACL grants. Existing disabled
+accounts remain blocked and cannot be re-enabled by OIDC. First login uses the
+existing serialized governance lock and unique subject constraint, and session
+creation and the durable login audit still precede transaction commit.
+
+This option changes initial account creation only. It does not replace the approved
+disabled-user lifecycle: trusted Authentik disable notifications through SCIM are
+still required to revoke existing sessions/shares and transfer ownership promptly.
+Removing that channel requires a separately implemented and validated equivalent;
+an OIDC login alone cannot revoke already-issued NambaDrive sessions when an
+account is later disabled. Keep the SCIM token and lifecycle controls configured.
+
 - `GET /scim/v2/ServiceProviderConfig`, `GET /Users` with pagination (max 100) and exact `externalId eq "..."` or `userName eq "..."` filters; `GET /Users/{local UUID}`.
 - `POST /Users`, `PUT /Users/{local UUID}` require externalId/userName/strict boolean active; optional displayName/emails. Names/email never identify principals. Validation errors use SCIM Error envelopes, no submitted payload reflection.
 - `DELETE /Users/{local UUID}` deactivates; never deletes database identities/documents.
