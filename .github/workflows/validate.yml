@@ -155,7 +155,7 @@ jobs:
           done
           docker exec nd-pg-hardening pg_isready -h 127.0.0.1 -U postgres
           docker exec nd-pg-hardening gosu postgres psql -U postgres -Atc 'SELECT 1' | grep -qx 1
-      - name: Container vulnerability gate (no unresolved Critical)
+      - name: Container vulnerability gate (no Critical or High authorization bypass)
         run: python scripts/deploy/scan_containers.py
       - uses: actions/upload-artifact@v4
         if: always()
