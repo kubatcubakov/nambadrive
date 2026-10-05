@@ -4,7 +4,9 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 name="nambadrive-wazuh-${RANDOM}"
 trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
-docker run -d --name "$name" --network none --entrypoint /bin/bash wazuh/wazuh-manager:4.14.8 -lc 'sleep infinity' >/dev/null
+docker run -d --name "$name" --network none --entrypoint /bin/bash wazuh/wazuh-manager:4.14.8@sha256:412f665c77af5497780d29d0d9f069d7a169c5eca45e9a3a47a587d9cfc99b55 -lc 'sleep infinity' >/dev/null
+# Restore the image's packaged configuration before starting only the test manager.
+docker exec "$name" bash /etc/cont-init.d/0-wazuh-init
 docker cp "$root/deploy/wazuh/nambadrive_rules.xml" "$name:/var/ossec/etc/rules/nambadrive_rules.xml"
 docker exec "$name" chown wazuh:wazuh /var/ossec/etc/rules/nambadrive_rules.xml
 docker exec "$name" /var/ossec/bin/wazuh-control start
