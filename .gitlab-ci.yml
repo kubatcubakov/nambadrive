@@ -1,0 +1,115 @@
+stages:
+  - validate
+  - test
+  - security
+  - build
+
+backend-lint:
+  stage: validate
+  image: python:3.13-slim
+  before_script:
+    - pip install --no-cache-dir -e 'backend[dev]'
+  script:
+    - ruff check backend/app backend/tests backend/alembic
+    - mypy backend/app
+
+backend-test:
+  stage: test
+  image: python:3.13-slim
+  before_script:
+    - pip install --no-cache-dir -e 'backend[dev]'
+  script:
+    - cd backend
+    - pytest -q --cov=app.authorization --cov-branch --cov-fail-under=90
+
+backend-migration-test:
+  stage: test
+  image: python:3.13-slim
+  services:
+    - name: postgres:17.11-alpine
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    POSTGRES_DB: nambadrive
+    POSTGRES_USER: nambadrive
+    POSTGRES_PASSWORD: ci-password
+    NAMBADRIVE_DATABASE_URL: postgresql+asyncpg://nambadrive:ci-password@postgres:5432/nambadrive
+    NAMBADRIVE_REDIS_URL: redis://redis:6379/0
+  before_script:
+    - pip install --no-cache-dir -e 'backend[dev]'
+  script:
+    - cd backend
+    - alembic upgrade head
+    - alembic check
+    - alembic downgrade 0002_identity_sessions
+    - alembic upgrade head
+    - NAMBADRIVE_TEST_POSTGRES=1 pytest -q tests/test_authorization.py tests/test_resource_api.py tests/test_postgres.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+
+frontend-check:
+  stage: validate
+  image: node:22-alpine
+  before_script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+  script:
+    - npm run typecheck
+    - npm run lint
+    - npm run build
+
+compose-validate:
+  stage: validate
+  image: docker:27-cli
+  script:
+    - cp deploy/aio/.env.example deploy/aio/.env
+    - sed -i 's/CHANGE_ME_DB/ci-only-db-password/g' deploy/aio/.env
+    - sed -i 's/CHANGE_ME_LONG_RANDOM_CSRF_SECRET/ci-only-csrf-secret-0123456789abcdef/g' deploy/aio/.env
+    - sed -i 's/CHANGE_ME_OIDC_CLIENT_SECRET/ci-only-oidc-secret/g' deploy/aio/.env
+    - docker compose -f deploy/aio/compose.yml --env-file deploy/aio/.env config >/dev/null
+
+secret-pattern-check:
+  stage: security
+  image: alpine:3.22
+  script:
+    - '! grep -RInE --exclude-dir=.git --exclude=.env.example --exclude-dir=docs "(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16})" .'
+
+build-backend:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker build -t nambadrive/backend:${CI_COMMIT_SHA} backend
+
+build-frontend:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker build -t nambadrive/frontend:${CI_COMMIT_SHA} frontend
+
+backend-security:
+  stage: security
+  image: python:3.13-slim
+  before_script:
+    - python -m pip install --upgrade 'pip>=26.2.1'
+    - pip install -e 'backend[dev]'
+  script:
+    - bandit -q -r backend/app
+    - python scripts/secret_scan.py
+    - pip-audit --local --skip-editable
+
+frontend-security:
+  stage: security
+  image: node:22-alpine
+  script:
+    - cd frontend
+    - npm ci
+    - npm audit --audit-level=low

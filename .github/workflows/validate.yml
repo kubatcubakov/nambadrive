@@ -1,0 +1,63 @@
+name: Validate security foundations
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade 'pip>=26.2.1' && pip install -e 'backend[dev]'
+      - run: ruff check backend/app backend/tests backend/alembic
+      - run: mypy backend/app
+      - run: pytest -q backend/tests --cov=app.authorization --cov-branch --cov-fail-under=90
+      - run: bandit -q -r backend/app
+      - run: python scripts/secret_scan.py
+      - run: pip-audit --local --skip-editable
+  postgres-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nambadrive_ci
+          POSTGRES_USER: nambadrive
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nambadrive -d nambadrive_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NAMBADRIVE_DATABASE_URL: postgresql+asyncpg://nambadrive:ci-only-password@localhost:5432/nambadrive_ci
+      NAMBADRIVE_TEST_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -e 'backend[dev]'
+      - working-directory: backend
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade 0002_identity_sessions
+          alembic upgrade head
+      - run: pytest -q backend/tests/test_authorization.py backend/tests/test_resource_api.py backend/tests/test_postgres.py --cov=app.authorization.service --cov-branch --cov-fail-under=90
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - working-directory: frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm audit --audit-level=low
