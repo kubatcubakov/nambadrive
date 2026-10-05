@@ -95,4 +95,4 @@ Validation includes SQLite and PostgreSQL 17 migrations, schema drift checks, AC
 
 The next approved phase is Phase 5, the SeaweedFS storage adapter. Document content operations must preserve the authorization gate and all approved controls.
 
-Phase 22 acceptance contracts and runtime boundaries: [docs/phase22-acceptance.md](docs/phase22-acceptance.md). Phase 21 all nine CI gates are green. Final Phase 22 CI and external UAT acceptance are required before release; no merge or production deployment has been performed.
+Phase 22 acceptance contracts and runtime boundaries: [docs/phase22-acceptance.md](docs/phase22-acceptance.md). Phase 21 all nine CI gates are green. All ten Phase 22 CI jobs are green at the documented checkpoint; final CI must remain green and external UAT acceptance is required before release; no merge or production deployment has been performed.

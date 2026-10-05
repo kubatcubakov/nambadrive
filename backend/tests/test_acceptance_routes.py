@@ -52,7 +52,8 @@ async def test_every_protected_route_denies_anonymous_requests(db, method, templ
             transport=ASGITransport(app=app), base_url="https://drive.example.test"
         ) as client:
             response = await client.request(method.upper(), path, json={})
-        assert response.status_code in {401, 403, 503}, (method, template, response.text)
+        expected = {401, 403, 503} if template.startswith("/scim/") else {401, 403}
+        assert response.status_code in expected, (method, template, response.text)
         assert response.headers["Cache-Control"] == "no-store"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
         assert identifier not in response.text

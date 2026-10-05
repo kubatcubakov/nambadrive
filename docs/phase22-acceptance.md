@@ -48,3 +48,14 @@ Automated implementation can proceed without these, but production acceptance ca
 5. Representative dataset/hardware and policy owners to confirm capacity, RPO/RTO, role matrix and mobile workflows.
 
 Keep secrets in the approved private mounts/vault, never Git, reports or chat logs. Production merge/deployment requires the user's separate permission. No production deployment, merge or external notification is executed by these tests.
+
+
+## Automated completion checkpoint
+
+[All ten CI jobs passed](https://github.com/kubatcubakov/nambadrive/actions/runs/37307177774) for `7ed71e57b7b9cbc437fa4a5dc3e9ffdebfbbaf5c`: backend, PostgreSQL migrations/regressions, frontend/Chromium, SeaweedFS, ClamAV, Tika/OpenSearch, Wazuh, backup/restore, 100-user HTTP load and deployment/container/ZAP acceptance.
+
+Actual Linux load: 1,000 requests, exactly 500 allows and 500 expected denials, zero unexpected results; p50 0.5021s, p95 1.117s, maximum 1.631s, 156 requests/s over 6.4102s. Actual ZAP: 59 checks passed, zero Medium/High and two informational alerts (Modern Web Application and Re-examine Cache-control Directives); no ignored rules. Reports are CI artifacts. Scope remains the unauthenticated passive HTTPS baseline described above.
+
+The final hardening of the acceptance harness rejects wrong-site/missing/malformed ZAP results (nine positive/negative regressions) and requires 401/403 from ordinary anonymous protected API requests; SCIM alone can return 503 when provisioning is unconfigured. Local full suite after these changes: 699 passed, 17 optional runtime skips, authorization coverage 95.88%. PostgreSQL suite: 661 passed, one local Redis runtime skip, service coverage 94.48%. Migration roundtrip, lint/typecheck/Chromium/SAST/SCA/secret gates pass. The final commit must preserve green CI; no new schema or production data mutation is introduced.
+
+**Automated roadmap implementation is complete through Phase 22. Production/UAT acceptance is pending the external prerequisites above.** Remaining vendor High OS/local-tool and bundled OpenSearch DoS findings remain visible in the scan artifacts and Phase 21 review; do not describe the system as having zero High vulnerabilities or as production-certified.
