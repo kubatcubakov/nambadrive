@@ -14,12 +14,14 @@ images.pop("nginx")
 images.pop("postgres")
 images.pop("redis")
 images.pop("opensearch")
+images.pop("clamav")
 reports = root / "container-reports"
 reports.mkdir(exist_ok=True)
 # Caller builds the application/runtime derivatives before scanning them.
 images.update(
     gateway="nambadrive/gateway:ci",
     redis="nambadrive/redis:ci",
+    clamav="nambadrive/clamav:ci",
     opensearch="nambadrive/opensearch:ci",
     backend="nambadrive/backend:ci",
     frontend="nambadrive/frontend:ci",

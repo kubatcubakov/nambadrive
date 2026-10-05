@@ -138,6 +138,7 @@ jobs:
           done
       - run: docker build -t nambadrive/gateway:ci deploy/common/gateway
       - run: docker build -t nambadrive/redis:ci deploy/common/redis
+      - run: docker build -t nambadrive/clamav:ci deploy/common/clamav
       - run: docker build -t nambadrive/opensearch:ci deploy/common/opensearch
       - run: docker build -t nambadrive/backend:ci backend
       - run: docker build -t nambadrive/frontend:ci frontend
