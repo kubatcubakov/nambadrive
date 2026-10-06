@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Resource = { id: string; name: string; resource_type: string };
 type Binding = {
@@ -17,6 +17,14 @@ type Entry = {
 };
 
 export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
+  const [departments, setDepartments] = useState<{id:string;name:string}[]>([]);
+  const [users, setUsers] = useState<{id:string;display_name:string;enabled:boolean}[]>([]);
+  useEffect(() => {
+    let active=true;
+    fetch('/api/v1/admin/organization').then(async r=>{if(r.ok){const d=await r.json();if(active)setDepartments(d.data.departments)}}).catch(()=>{});
+    fetch('/api/v1/identity').then(async r=>{if(r.ok){const d=await r.json();if(active)setUsers(d.data.users)}}).catch(()=>{});
+    return()=>{active=false};
+  }, []);
   const [rows, setRows] = useState<Resource[]>([]);
   const [parent, setParent] = useState("");
   const [department, setDepartment] = useState("");
@@ -43,7 +51,7 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
     };
     if (method !== "GET") {
       const csrf = await fetch("/api/v1/auth/csrf");
-      if (!csrf.ok) throw new Error("Session unavailable");
+      if (!csrf.ok) throw new Error("Войдите повторно");
       headers["X-CSRF-Token"] = (
         (await csrf.json()) as { data: { csrf_token: string } }
       ).data.csrf_token;
@@ -53,15 +61,15 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!response.ok) throw new Error("Access denied or invalid request");
+    if (!response.ok) throw new Error("Запрос отклонён: проверьте права и данные");
     return (await response.json()) as { data: unknown };
   }
   async function run(action: () => Promise<void>) {
     try {
       await action();
-      setStatus("Done");
+      setStatus("Изменения сохранены");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Operation failed");
+      setStatus(error instanceof Error ? error.message : "Операция не выполнена");
     }
   }
   async function load() {
@@ -80,13 +88,14 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
   }
   return (
     <section>
-      <h2>Resource tree and permissions</h2>
+      <h2>{resourceId ? "Настройка доступа" : "Пространства и права"}</h2>
       <p role="status">{status}</p>
+      {!resourceId && <details className="resource-create" open><summary>Создать пространство или папку</summary>
       <label>
-        Parent resource UUID (empty for spaces){" "}
+        Родительская папка (UUID, для пространства не требуется){" "}
         <input value={parent} onChange={(e) => setParent(e.target.value)} />
       </label>
-      <button onClick={() => void run(load)}>Load children</button>
+      <button onClick={() => void run(load)}>Показать содержимое</button>
       <ul>
         {rows.map((row) => (
           <li key={row.id}>
@@ -104,10 +113,10 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
         ))}
       </ul>
       <label>
-        Name <input value={name} onChange={(e) => setName(e.target.value)} />
+        Название <input value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <label>
-        Type{" "}
+        Тип ресурса{" "}
         <select value={type} onChange={(e) => setType(e.target.value)}>
           <option>SPACE</option>
           <option>FOLDER</option>
@@ -115,14 +124,11 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
         </select>
       </label>
       <label>
-        Department UUID{" "}
-        <input
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-        />
+        Отдел{" "}
+        {departments.length ? <select value={department} onChange={e=>setDepartment(e.target.value)}><option value="">Выберите отдел</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select> : <input placeholder="UUID отдела" value={department} onChange={e=>setDepartment(e.target.value)}/> }
       </label>
       <label>
-        Classification{" "}
+        Классификация{" "}
         <select
           value={classification}
           onChange={(e) => setClassification(e.target.value)}
@@ -140,16 +146,16 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
           checked={inherit}
           onChange={(e) => setInherit(e.target.checked)}
         />
-        Inherit ACL
+        Наследовать права
       </label>
-      <button
+      <button className="primary" disabled={!name.trim() || !department || (type !== "SPACE" && !parent)}
         onClick={() =>
           void run(async () => {
             await request("", "POST", {
               resource_type: type,
               name,
               department_id: department,
-              parent_id: parent || null,
+              parent_id: type === "SPACE" ? null : parent || null,
               inherit_acl: inherit,
               classification,
             });
@@ -157,13 +163,14 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
           })
         }
       >
-        Create resource
-      </button>
+        Создать ресурс
+      </button></details>}
+      <details className="acl-controls"><summary>Расширенные права и наследование</summary>
       <label>
-        ACL resource UUID{" "}
+        Ресурс для настройки (UUID){" "}
         <input value={resource} onChange={(e) => setResource(e.target.value)} />
       </label>
-      <button onClick={() => void run(loadAcl)}>Load ACL</button>
+      <button onClick={() => void run(loadAcl)}>Загрузить права</button>
       <button
         disabled={!resource || !reason.trim()}
         onClick={() =>
@@ -194,13 +201,13 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
                   })
                 }
               >
-                Revoke
+                Отозвать
               </button>
             )}
           </li>
         ))}
       </ul>
-      <button onClick={() => void run(loadBindings)}>Load role bindings</button>
+      <button onClick={() => void run(loadBindings)}>Загрузить роли</button>
       <ul>
         {bindings.map((b) => (
           <li key={b.id}>
@@ -219,7 +226,7 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
                   })
                 }
               >
-                Revoke role
+                Отозвать роль
               </button>
             )}
           </li>
@@ -246,13 +253,13 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
           })
         }
       >
-        Assign role to user UUID below
+        Назначить роль выбранному сотруднику
       </button>
       <label>
-        Principal type{" "}
+        Тип получателя{" "}
         <select
           value={principalType}
-          onChange={(e) => setPrincipalType(e.target.value)}
+          onChange={(e) => {setPrincipalType(e.target.value);setPrincipal("")}}
         >
           <option>USER</option>
           <option>DEPARTMENT</option>
@@ -260,14 +267,11 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
         </select>
       </label>
       <label>
-        Principal UUID{" "}
-        <input
-          value={principal}
-          onChange={(e) => setPrincipal(e.target.value)}
-        />
+        Получатель прав{" "}
+        {principalType==='USER' && users.length ? <select value={principal} onChange={e=>setPrincipal(e.target.value)}><option value="">Выберите сотрудника</option>{users.filter(u=>u.enabled).map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}</select> : principalType==='DEPARTMENT' && departments.length ? <select value={principal} onChange={e=>setPrincipal(e.target.value)}><option value="">Выберите отдел</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select> : <input placeholder="UUID получателя" value={principal} onChange={e=>setPrincipal(e.target.value)}/> }
       </label>
       <label>
-        Permission{" "}
+        Разрешение{" "}
         <select
           value={permission}
           onChange={(e) => setPermission(e.target.value)}
@@ -280,7 +284,7 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
         </select>
       </label>
       <label>
-        Effect{" "}
+        Действие правила{" "}
         <select value={effect} onChange={(e) => setEffect(e.target.value)}>
           <option>ALLOW</option>
           <option>DENY</option>
@@ -292,14 +296,14 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
           checked={propagate}
           onChange={(e) => setPropagate(e.target.checked)}
         />
-        Propagate to children
+        Применять к вложенным ресурсам
       </label>
       <label>
-        Reason{" "}
+        Причина{" "}
         <input value={reason} onChange={(e) => setReason(e.target.value)} />
       </label>
       <label>
-        Expiry (optional){" "}
+        Срок действия (необязательно){" "}
         <input
           type="datetime-local"
           value={expiry}
@@ -324,6 +328,7 @@ export function ResourceAdmin({ resourceId = "" }: { resourceId?: string }) {
       >
         Add ACL entry
       </button>
+      </details>
     </section>
   );
 }
