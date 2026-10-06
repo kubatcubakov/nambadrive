@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Shares } from "./Shares";
 import { RequestAccess } from "./AccessRequests";
-import { OfficeEditor } from "./OfficeEditor";
 import { Versions } from "./Versions";
 import { Upload } from "./Upload";
 import { Search } from "./Search";
@@ -82,7 +81,7 @@ export function Drive({
   const [selected, setSelected] = useState<Detail | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [status, setStatus] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [parentPermissions, setParentPermissions] = useState<string[]>([]);
   const [classification, setClassification] = useState("INTERNAL");
@@ -157,6 +156,7 @@ export function Drive({
   const loadDocument = useCallback(async (id: string) => {
     setPreview(false);
     setDetailTab("info");
+    setDetailsOpen(false);
     setPermissions([]);
     setSelected(null);
     setShowAcl(false);
@@ -229,7 +229,7 @@ export function Drive({
       </nav>}
       {!trash && (
         <nav className="breadcrumbs" aria-label="Путь">
-          <button onClick={() => {setPage(1);setPath([]);setSelected(null);setEditing(null)}}>{({mine:"Мои документы",spaces:"Общие пространства",departments:"Отделы",shared:"Доступные мне",recent:"Недавние",favorites:"Избранное",trash:"Корзина"}[view])}</button>
+          <button onClick={() => {setPage(1);setPath([]);setSelected(null);setDetailsOpen(false)}}>{({mine:"Мои документы",spaces:"Общие пространства",departments:"Отделы",shared:"Доступные мне",recent:"Недавние",favorites:"Избранное",trash:"Корзина"}[view])}</button>
           {path.map((item, index) => (
             <button
               key={item.id}
@@ -404,15 +404,15 @@ export function Drive({
       )}
       {selected && !trash && (
         <article className="document-detail">
-          <div className="document-heading"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><h1>{selected.name}</h1><button aria-label="Закрыть документ" onClick={() => {setSelected(null); setPreview(false); setEditing(null)}}>✕</button></div>
+          <div className="document-heading"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><h1>{selected.name}</h1><button aria-label="Закрыть документ" onClick={() => {setSelected(null); setPreview(false); setDetailsOpen(false)}}>✕</button></div>
           <p className="document-subtitle">{selected.name.split(".").at(-1)?.toUpperCase()} · {formatSize(selected.size)}</p>
           <div className="document-actions"><button aria-label="Обновить документ" onClick={()=>void run(()=>loadDocument(selected.id))}>↻</button>
 
           {permissions.includes("EDIT") &&
             /\.(docx|xlsx|pptx)$/i.test(selected.name) && (
-              <button className="primary" onClick={() => setEditing(selected.id)}>
+              <a className="primary editor-link" target="_blank" rel="noopener noreferrer" href={`/?editor=${selected.id}`}>
                 Открыть в редакторе
-              </button>
+              </a>
             )}
           {permissions.includes("PREVIEW") && ["application/pdf", "image/jpeg", "image/png", "text/plain", "text/csv", "application/json", "application/xml"].includes(selected.mime_type) && (
             <button onClick={() => setPreview(!preview)}>Предпросмотр</button>
@@ -420,10 +420,11 @@ export function Drive({
           {permissions.includes("DOWNLOAD") && (
             <a href={`/api/v1/documents/${selected.id}/download`}>Скачать</a>
           )}
-          {permissions.includes("SHARE") && <button onClick={()=>setDetailTab("access")}>Поделиться</button>}
+          {permissions.includes("SHARE") && <button onClick={()=>{setDetailTab("access");setDetailsOpen(true)}}>Поделиться</button>}
           </div>
-          <div className="document-body"><div className="document-canvas">
-          {editing === selected.id ? <OfficeEditor documentId={editing} onClose={() => setEditing(null)} /> : !preview && <div className="preview-placeholder"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><strong>{selected.name}</strong><p>{/\.(docx|xlsx|pptx)$/i.test(selected.name) ? "Откройте документ в ONLYOFFICE с помощью кнопки выше." : "Выберите «Предпросмотр», чтобы увидеть содержимое, если формат поддерживается."}</p></div>}
+          <button className="details-toggle" aria-expanded={detailsOpen} aria-controls="document-sidebar" onClick={()=>setDetailsOpen(!detailsOpen)}>{detailsOpen ? "Скрыть панель" : "Сведения, доступ и версии"}</button>
+          <div className={`document-body ${detailsOpen ? "" : "details-collapsed"}`}><div className="document-canvas">
+          {!preview && <div className="preview-placeholder"><span className="file-badge">{selected.name.split(".").at(-1)?.toUpperCase()}</span><strong>{selected.name}</strong><p>{/\.(docx|xlsx|pptx)$/i.test(selected.name) ? "Откройте документ в ONLYOFFICE с помощью кнопки выше." : "Выберите «Предпросмотр», чтобы увидеть содержимое, если формат поддерживается."}</p></div>}
           {preview && (
             <img
               className="document-preview"
@@ -434,7 +435,7 @@ export function Drive({
               }
             />
           )}
-          </div><aside className="document-sidebar">
+          </div><aside id="document-sidebar" className="document-sidebar" hidden={!detailsOpen}>
           <nav className="tabs" aria-label="Панель документа">{[["info", "Сведения"], ["access", "Доступ"], ["versions", "Версии"]].map(([key, label]) => <button key={key} aria-current={detailTab === key ? "page" : undefined} onClick={() => setDetailTab(key)}>{label}</button>)}</nav>
           <div className="classification-badge">{classificationLabels[classification] ?? classification}</div>
           <section hidden={detailTab !== "info"}>

@@ -630,3 +630,16 @@ button.primary:hover { background:#0457de; }
 .file-picker:hover {background:#edf3ff;border-color:#afc8f5;}
 .file-picker:focus-within {outline:2px solid var(--accent);outline-offset:2px;}
 .selected-files {color:#637389;font-size:12px;overflow-wrap:anywhere;}
+
+.document-body.details-collapsed {grid-template-columns:minmax(0,1fr);}
+.document-sidebar[hidden] {display:none;}
+.details-toggle {margin:0 0 16px;}
+.document-actions .editor-link {background:#2563eb;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;}
+.standalone-editor {height:100dvh;overflow:hidden;background:#f6f8fc;}
+.office-fullscreen {height:100%;display:flex;flex-direction:column;}
+.office-fullscreen > header {display:flex;align-items:center;gap:16px;padding:8px 16px;flex:none;}
+.office-fullscreen > header p {margin:0;font-size:12px;}
+.office-fullscreen .office-editor-host {flex:1;min-height:0;width:100%;}
+.office-fullscreen iframe {width:100%;height:100%;border:0;}
+@media(max-width:600px) {.office-fullscreen > header p {display:none;}}
+.office-fullscreen > iframe {flex:1;min-height:0;height:0;}

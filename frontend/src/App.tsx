@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AccessReviews } from "./AccessReviews";
 import { Drive } from "./Drive";
+import { OfficeEditor } from "./OfficeEditor";
 import { Notifications } from "./Notifications";
 import { Quotas } from "./Quotas";
 import { Governance } from "./Governance";
@@ -136,6 +137,13 @@ export function App() {
         </section>
       </main>
     );
+  const editorId = new URLSearchParams(window.location.search).get("editor");
+  if (editorId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editorId)) {
+      return <main><p role="alert">Некорректный адрес документа.</p></main>;
+    }
+    return <main className="standalone-editor"><OfficeEditor documentId={editorId} fullscreen onClose={()=>window.location.assign(`/?document=${editorId}`)}/></main>;
+  }
   const title =
     navigation.find((n) => n[0] === view)?.[2] ?? "Администрирование";
   const isDrive = ["mine", "spaces", "departments", "shared", "recent", "favorites", "trash", "search"].includes(view);

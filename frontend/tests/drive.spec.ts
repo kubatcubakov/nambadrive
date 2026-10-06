@@ -205,8 +205,12 @@ test("folder upload is distinct from a new version and unsupported office previe
   await expect(page.getByRole("button",{name:"Загрузить файлы",exact:true})).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Договор.docx",exact:false})).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Предпросмотр",exact:true})).toHaveCount(0);
-  await expect(page.getByRole("button",{name:"Открыть в редакторе",exact:true})).toBeVisible();
+  await expect(page.getByRole("link",{name:"Открыть в редакторе",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).not.toBeVisible();
+  await expect(page.getByRole("navigation",{name:"Панель документа"})).not.toBeVisible();
+  await expect(page.getByRole("link",{name:"Открыть в редакторе"})).toHaveAttribute("target","_blank");
+  await expect(page.getByRole("link",{name:"Открыть в редакторе"})).toHaveAttribute("href",`/?editor=${id}`);
+  await page.getByRole("button",{name:"Сведения, доступ и версии"}).click();
   await page.getByRole("button",{name:"Версии",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Новая версия",exact:true})).toBeVisible();
   await page.screenshot({path:info.outputPath("file-workspace.png"),fullPage:true});
@@ -225,4 +229,20 @@ test("global header search keeps the existing encoded API and clears results", a
   await page.getByRole("button",{name:"Очистить",exact:true}).click();
   await expect(input).toHaveValue("");
   await expect(page.getByText("Согласованный договор",{exact:true})).toHaveCount(0);
+});
+
+test("standalone editor keeps session authorization and omits the workspace sidebar", async ({page})=>{
+  await fixture(page);
+  let csrfHeader="";
+  await page.route(`**/api/v1/office/${id}/session`,async r=>{
+    csrfHeader=r.request().headers()["x-csrf-token"];
+    await r.fulfill({status:403,json:{error:{message:"denied"}}});
+  });
+  await page.goto(`/?editor=${id}`);
+  await expect(page.getByRole("status")).toContainText("Редактор недоступен");
+  expect(csrfHeader).toBe("ui-test-only");
+  await expect(page.getByRole("navigation",{name:"Основная навигация"})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Вернуться к документу"})).toBeVisible();
+  await page.getByRole("button",{name:"Вернуться к документу"}).click();
+  await expect(page).toHaveURL(new RegExp(`document=${id}`));
 });

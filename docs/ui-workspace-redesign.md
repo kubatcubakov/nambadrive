@@ -25,3 +25,17 @@ The UI branch is based on `codex/oidc-jit-provisioning` so that the user's opted
 After reviewing the installed pilot UI, the first iteration was found to retain a stacked search block and a document card below the file table. The refinement moves the existing search form into the global header (React portal, unchanged search API), makes an open document replace the file table, places metadata/access/version panels beside its workspace, collapses editable metadata forms, and groups secondary navigation under Workflows. File icons, typography, spacing, classification badges and named file selection are adjusted to the approved concept. No DOCX raster preview is fabricated; Office content still requires the signed ONLYOFFICE flow.
 
 The browser regression explicitly checks that the document title appears near the top of the viewport and that folder upload/list controls disappear in document mode. Revocation is rechecked through the document refresh action, which clears previously shown detail before retrying the authorized API.
+
+## Separate editor tab and collapsed document panel
+
+The editor action opens `/?editor=<document_uuid>` in a separate tab with
+`noopener noreferrer`. This authenticated application view contains the editor
+and a return action; the signed Office session and CSRF flow are unchanged.
+The editor fills the available viewport, without the Drive sidebar.
+
+The document information/access/version panel starts collapsed for each document
+and is controlled by an accessible toggle. Share opens the access panel.
+No authorization grants or backend API contracts change.
+
+Validation: seven Chromium UI tests, TypeScript/Vite build, ESLint and secret scan.
+Real editor rendering and saving on the pilot remain a user-run check after update.
